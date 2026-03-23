@@ -119,7 +119,7 @@ class Choroidalyzer:
         self.threshold = threshold
         self.fov_thresh = fov_thresh
         self.verbose = ~verbose
-        if torch.cude.is_available():
+        if torch.cuda.is_available():
             self.device = "cuda"
         elif torch.backends.mps.is_available():
             self.device = "mps"

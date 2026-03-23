@@ -119,8 +119,12 @@ class Choroidalyzer:
         self.threshold = threshold
         self.fov_thresh = fov_thresh
         self.verbose = ~verbose
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.device = "mps" if torch.backends.mps.is_available() else self.device
+        if torch.cude.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
         if local_model_path is not None:
             if base:
                 self.model = torch.load(local_model_path[0], map_location=self.device)

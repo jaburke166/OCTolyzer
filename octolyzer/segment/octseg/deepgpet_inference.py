@@ -90,8 +90,12 @@ class DeepGPET:
         self.transform = get_default_img_transforms(self.padding)
         self.threshold = threshold
         self.verbose = ~verbose
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.device = "mps" if torch.backends.mps.is_available() else self.device
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
         if local_model_path is not None:
             self.model = torch.load(local_model_path, map_location=self.device)
         else:

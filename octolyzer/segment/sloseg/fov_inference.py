@@ -145,7 +145,7 @@ class FOVSegmenter:
         """
         self.transform = get_default_img_transforms()
         self.threshold = threshold
-        if torch.cude.is_available():
+        if torch.cuda.is_available():
             self.device = "cuda"
         elif torch.backends.mps.is_available():
             self.device = "mps"

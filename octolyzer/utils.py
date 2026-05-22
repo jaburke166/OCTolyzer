@@ -1473,7 +1473,7 @@ def load_annotation(path, key=None, raw=False, binary=False):
 
 
 
-def plot_composite_bscans(bscan_data, vmasks, fovea_info, layer_pairwise, reshape_idx, analyse_choroid, fname, save_path, overlay_areas=None):
+def plot_composite_bscans(bscan_data, vmasks, fovea_info, layer_pairwise, reshape_idx, analyse_choroid, fname, save_path, overlay_areas=None, side_by_side=False):
     """
     Create and save a composite high-resolution visualization of all B-scans in an OCT stack.
 
@@ -1515,6 +1515,8 @@ def plot_composite_bscans(bscan_data, vmasks, fovea_info, layer_pairwise, reshap
         - `thicks`: List of thickness measurements and their corresponding overlays.
         - `macula_rum`: Radius of the macular region of interest in microns.
 
+    side_by_side : bool, optional
+        Flag indicating whether to display raw and segmented B-scans side by side.
     Returns:
     -------
     None
@@ -1593,7 +1595,12 @@ def plot_composite_bscans(bscan_data, vmasks, fovea_info, layer_pairwise, reshap
 
     # Figure to be saved out at same dimensions as stacked array
     h,w = bscan_stacked.shape
-    fig, ax = plt.subplots(1,1,figsize=(w/1000, h/1000), dpi=100)
+    if side_by_side:
+        fig, (ax0, ax) = plt.subplots(1,2,figsize=(2*w/1000, h/1000), dpi=100)
+        ax0.imshow(bscan_stacked, cmap='gray')
+        ax0.set_axis_off()
+    else:
+        fig, ax = plt.subplots(1,1,figsize=(w/1000, h/1000), dpi=100)
     ax.set_axis_off()
 
     # Overlay stacked B-scans and ROI maps of retina and choroid (if provided)

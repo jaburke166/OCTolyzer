@@ -911,7 +911,8 @@ Skipping file and outputting -1s for measurements of each layer."""
                                             analyse_choroid, 
                                             fname, 
                                             save_path, 
-                                            overlays)
+                                            overlays, 
+                                            side_by_side=True)
                 
                 # Copy composite into oct_segmentations directory
                 if collate_segmentations:
@@ -1303,7 +1304,8 @@ NOTE: Subregion volumes will not be computed for CVI map."""
                                             reshape_idx, 
                                             analyse_choroid, 
                                             fname, 
-                                            save_path)
+                                            save_path, 
+                                            side_by_side=False)
                 
                 # Copy composite into oct_segmentations directory
                 if N_scans in [61, 31, 45, 7]:

@@ -152,11 +152,14 @@ class Choroidalyzer:
             pred_map = pred[:2]
             fov_map = pred[-1].unsqueeze(0)
             fovea, fov_score = process_fovea_prediction(fov_map)
+            fovea = fovea[0]
+            fov_score = fov_score[0]
             if self.fov_thresh is not None:
-                fovea = np.array([0,0]) if fov_map.max() < self.fov_thresh else fovea
+                if fov_map.max() < self.fov_thresh:
+                    fovea = np.zeros(2, dtype=fovea.dtype)
             if not soft_pred:
                 pred = (pred_map > self.threshold).int()
-            return pred.cpu().numpy()[:, :M, :N],  fovea[0], fov_score[0]
+            return pred.cpu().numpy()[:, :M, :N], fovea, fov_score
 
     def predict_list(self, img_list, soft_pred=False):
         """Inference on a list of images without batching"""
@@ -169,7 +172,7 @@ class Choroidalyzer:
                 preds.append(pred)
                 foveas.append(fovea)
                 fov_scores.append(fov_score)
-        return preds, foveas, np.concatenate(fov_scores)
+        return np.stack(preds), np.stack(foveas), np.stack(fov_scores)
 
     # TODO: Peripapillary scans will not work here
     def _predict_loader(self, loader, soft_pred=False):

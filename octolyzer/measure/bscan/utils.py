@@ -315,12 +315,16 @@ def generate_perp_line(pt1, pt2=None, N=None, ref_pt=None):
 
 
 
-def detect_orthogonal_coords(reference_pts, traces, offset=15, tol=2):
+def detect_orthogonal_coords(reference_pts, traces, offset=15, tol=2, preserve_shape=False):
     """
     Detects coordinates along the lower boundary that intersect with perpendicular lines
     drawn from tangent lines at reference points along the upper boundary. The function calculates
     the points on the lower boundary where the perpendicular lines from the upper boundary's tangent
     lines intersect, within a given tolerance.
+
+    If preserve_shape is True, the function keeps one output row per input
+    reference point. Failed matches are marked with np.nan instead of being
+    removed.
 
     Parameters:
     -----------
@@ -339,6 +343,10 @@ def detect_orthogonal_coords(reference_pts, traces, offset=15, tol=2):
     tol : int, optional, default=2
         The threshold (in pixels) to detect pixels along the lower boundary which intersect as close to the
         perpendicular lines.
+
+    preserve_shape : bool, optional, default=False
+        If True, the function will return an output array with the same number of rows as `reference_pts`,
+        where rows corresponding to failed matches (no intersection within tolerance) are filled with np.nan.
 
     Returns:
     --------
@@ -383,13 +391,28 @@ def detect_orthogonal_coords(reference_pts, traces, offset=15, tol=2):
     
     # Vectorised search for points along Choroid-Sclera boundary where orthogonal 
     # lines from RPE-Choroid intersect
-    perps = np.array(perps)
-    bot_cropped = bot_lyr[(perps[:,0].astype(int)-botlyr_stx).clip(0, bot_lyr.shape[0]-1)]
-    bot_perps_residuals = np.transpose(perps, (0,2,1)) - bot_cropped
-    bot_perps_distances = np.sqrt(((bot_perps_residuals)**2).sum(axis=-1))
-    endpoint_errors = np.min(bot_perps_distances, axis=-1) <= tol 
-    botlyr_indexes = np.argmin(bot_perps_distances, axis=1)
-    botlyr_pts = perps[np.arange(botlyr_indexes.shape[0]),:,botlyr_indexes].astype(int)
 
-    return botlyr_pts[endpoint_errors], reference_pts[endpoint_errors], perps[endpoint_errors].astype(int)
-    
+    perps = np.array(perps, dtype=np.float64)
+    bot_cropped = bot_lyr[(perps[:, 0].astype(int) - botlyr_stx).clip(0, bot_lyr.shape[0] - 1)]
+    bot_perps_residuals = np.transpose(perps, (0, 2, 1)) - bot_cropped
+    bot_perps_distances = np.sqrt((bot_perps_residuals ** 2).sum(axis=-1))
+    endpoint_valid = np.min(bot_perps_distances, axis=-1) <= tol
+    botlyr_indexes = np.argmin(bot_perps_distances, axis=1)
+    botlyr_pts = perps[np.arange(botlyr_indexes.shape[0]), :, botlyr_indexes]
+
+    if preserve_shape:
+        botlyr_pts = botlyr_pts.astype(np.float64, copy=True)
+        perps = perps.astype(np.float64, copy=True)
+
+        botlyr_pts[~endpoint_valid] = np.nan
+        perps[~endpoint_valid] = np.nan
+
+        outputs = (botlyr_pts, reference_pts.copy(), perps)
+    else:
+        outputs = (
+            botlyr_pts[endpoint_valid].astype(int),
+            reference_pts[endpoint_valid],
+            perps[endpoint_valid].astype(int),
+        )
+
+    return outputs

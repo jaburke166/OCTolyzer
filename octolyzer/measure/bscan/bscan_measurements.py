@@ -236,16 +236,17 @@ def compute_measurement(reg_mask,
     if measure_type == "perpendicular":
         botlyr_pts, toplyr_pts, perps = bscan_utils.detect_orthogonal_coords(toplyr_pts, 
                                                                                       traces, 
-                                                                                      offset)
+                                                                                      offset, 
+                                                                                      preserve_shape=True)
     elif measure_type == "vertical":
         st_Bx = bot_lyr[0,0]
         botlyr_pts = bot_lyr[toplyr_pts[:,0]-st_Bx]
 
     # Collect reference points along boundaries to make thickness measurement
-    botlyr_pts = botlyr_pts.reshape(N_measures, N_avgs+1, 2)
-    toplyr_pts = toplyr_pts.reshape(N_measures, N_avgs+1, 2)
+    botlyr_pts = botlyr_pts.astype(np.float64).reshape(N_measures, N_avgs+1, 2)
+    toplyr_pts = toplyr_pts.astype(np.float64).reshape(N_measures, N_avgs+1, 2)
     boundary_pts = np.concatenate([toplyr_pts.reshape(*botlyr_pts.shape), botlyr_pts], axis=-1).reshape(*botlyr_pts.shape, 2)
-                                       
+    
     # Compute choroid thickness at each reference point.
     delta_xy = np.abs(np.diff(boundary_pts, axis=boundary_pts.ndim-2)) * np.array([micron_pixel_x, micron_pixel_y])
 

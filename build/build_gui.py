@@ -43,6 +43,7 @@ def build_launcher(output_directory: Path, *, clean: bool = False) -> Path:
         "--output-filename=OCTolyzerGUI",
         f"--report={report_path}",
         "--product-name=OCTolyzer",
+        "--product-version=1.0.0",
         "--file-description=OCTolyzer desktop launcher",
         str(ROOT / "gui" / "app.py"),
     ]

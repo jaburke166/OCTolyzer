@@ -1,18 +1,18 @@
 # CONFIGURATION FILE FOR SETTING UP OCT AND SLO ANALYSIS OF HEIDELBERG DATA
 # MAKE SURE NAMES AND INPUTS ARE SEPARATED WITH ": " [colon-spacebar]
 
-# This is the folder which .vol files will be read from and analysed
-analysis_directory: /Users/s1522100/Documents/OCTolyzer/demo/input
+# These paths are relative to this configuration file so the launcher works from any location.
+analysis_directory: demo/input
 
 # This is the folder which will save all results into
-output_directory: /Users/s1522100/Documents/OCTolyze/demo/output
+output_directory: demo/output
 
 --------------------------------------------------------------------------------------------------------
 
 # For typical use case, leave settings below untouched (all set to 1)
-# For debugging any unexpected errors, set robust_run to 0. 
+# For debugging any unexpected errors, set robust_run to 0.
 # Otherwise, 1 will skip over any files which throw up unexpected error.
-robust_run: 0
+robust_run: 1
 
 # Option to save out segmentation masks and raw images of .vol scan per individual.
 save_individual_segmentations: 1
@@ -34,7 +34,7 @@ custom_maps: 0
 
 # This flags that ALL inner retinal layer thickness maps will be computed. 
 # Only valid for OCT Volume scans.
-analyse_all_maps: 0
+analyse_all_maps: 1
 
 # By default, ETDRS grid will be measured for OCT Volume data. This is a flag for measuring a square 8x8 posterior pole grid.
 # Only valid for OCT Volume scans.
@@ -43,7 +43,7 @@ analyse_square_grid: 0
 # Option to measure choroid A-scan, column-wise (vertical) or locally perpendicular to 
 # upper boundary (perpendicular)
 # Only valid for OCT Volume and Linescan data
-choroid_measure_type: vertical
+choroid_measure_type: perpendicular
 
 # Distance either side of fovea to measure structures in H-line/V-line/Radial scans in microns, i.e. 500 microns, 3000 microns, etc.
 # Only valid for OCT Linescan data, centred at the fovea (H-line/V-line/Radial)

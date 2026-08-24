@@ -1,0 +1,64 @@
+OCTolyzer GUI
+==============
+
+The GUI is a lightweight desktop launcher for OCTolyzer. It discovers Python environments, edits config.txt values, checks the selected environment, and starts batch processing.
+
+Development setup
+-----------------
+
+The GUI dependencies are separate from the scientific processing environment:
+
+    python -m pip install -r requirements-gui.txt
+
+The selected processing environment must also have the packages in requirements.txt installed. The GUI checks these packages before enabling the Run analysis button.
+
+Run from the repository
+-----------------------
+
+From the repository root, run:
+
+    python -m gui.app
+
+The application requires PySide6 in the interpreter used to launch the GUI. It does not require PyTorch in that interpreter because the analysis is started in the selected processing environment.
+
+Using a packaged build
+----------------------
+
+Build the launcher on the target operating system. Nuitka builds are platform-specific and require a native C compiler.
+
+When building from an Anaconda environment on Linux, install the static Python library and ELF patching tool first:
+
+    conda install -n oct-analysis libpython-static patchelf
+
+    python -m build.build_gui --clean
+
+The output is a standalone directory under dist/gui. Keep the runtime directory next to the compiled launcher. The runtime contains the OCTolyzer source, figures, and default config.txt.
+
+Workflow
+--------
+
+1. Start OCTolyzer GUI.
+2. Refresh the environment list and select the environment containing OCTolyzer dependencies.
+3. Select Check environment and wait for the compatibility result. Use Re-check after changing packages.
+4. Choose the folder containing .vol files and the output folder. Invalid or missing folders are marked inline.
+5. Set the analysis options in the grouped configuration sections. Select custom maps to open the searchable retinal layer-pair dialog.
+6. Select Run analysis. The action becomes available only when the environment and configuration are ready.
+7. Review the live log, using Clear, Copy, or Export when needed, and open the selected output folder after completion.
+
+The GUI creates a temporary configuration for each run. The selected configuration is copied by OCTolyzer into the output folder as configuration_used.txt. The repository config.txt is changed only when the user explicitly saves a configuration there.
+
+Models and network access
+-------------------------
+
+OCTolyzer model weights are downloaded by the selected processing environment the first time the models are used. The first run therefore requires network access unless the model weights are already cached. A failed model download is reported in the processing log.
+
+The GUI does not install Conda environments, GPU drivers, or model weights automatically. If no compatible environment is found, install the scientific requirements in a Python 3.11 environment and refresh the list.
+
+Troubleshooting
+---------------
+
+- If no environment is listed, install Python or Miniconda and refresh.
+- If packages are missing, select an environment with requirements.txt installed.
+- If the input folder contains no .vol files, choose the folder containing the Heidelberg scans.
+- If a packaged build cannot find its runtime, restore the runtime directory beside the compiled launcher.
+- For an analysis failure, keep the processing log and the output folder when reporting the problem.

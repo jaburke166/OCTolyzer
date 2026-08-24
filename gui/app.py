@@ -460,12 +460,9 @@ class MainWindow(QMainWindow):
         for button in (self.browse_button, self.refresh_button, self.probe_button):
             button.setFixedSize(36, 30)
         environment_row.addWidget(self.environment_combo, stretch=1)
-        environment_actions = QHBoxLayout()
-        environment_actions.setSpacing(6)
-        environment_actions.addStretch(1)
-        environment_actions.addWidget(self.browse_button)
-        environment_actions.addWidget(self.refresh_button)
-        environment_actions.addWidget(self.probe_button)
+        environment_row.addWidget(self.browse_button)
+        environment_row.addWidget(self.refresh_button)
+        environment_row.addWidget(self.probe_button)
         self.environment_status = QLabel("Choose an environment to check.")
         self.environment_status.setObjectName("statusMessage")
         self.environment_status.setWordWrap(True)
@@ -480,7 +477,6 @@ class MainWindow(QMainWindow):
         self.environment_progress.setTextVisible(False)
         self.environment_progress.setVisible(False)
         environment_layout.addLayout(environment_row)
-        environment_layout.addLayout(environment_actions)
         environment_details = QHBoxLayout()
         environment_details.setSpacing(10)
         environment_details.addWidget(self.environment_source_label)
@@ -1062,6 +1058,19 @@ def find_runtime_root() -> Path:
     configured_root = os.environ.get("OCTOLYZER_RUNTIME")
     if configured_root:
         candidates.append(Path(configured_root).expanduser())
+    compiled = globals().get("__compiled__")
+    containing_directory = getattr(compiled, "containing_dir", None)
+    if containing_directory:
+        containing_path = Path(containing_directory)
+        if getattr(compiled, "macos_bundle_mode", False):
+            # Nuitka reports containing_dir as the .app bundle path itself in
+            # macOS app-bundle mode (it strips two extra levels off the
+            # executable's directory), and the staged runtime payload lives
+            # under Contents/MacOS inside that bundle.
+            candidates.append(containing_path / "Contents" / "MacOS" / "runtime")
+        else:
+            candidates.append(containing_path / "runtime")
+    candidates.append(Path(__file__).resolve().parent / "runtime")
     candidates.append(Path(sys.argv[0]).resolve().parent / "runtime")
     candidates.append(Path(__file__).resolve().parents[1])
     for candidate in candidates:

@@ -148,7 +148,7 @@ For a double-clickable distribution, build the launcher on the target operating 
 python -m build.build_gui --clean
 ```
 
-Nuitka builds are platform-specific and require a native C compiler. Keep the generated `runtime` directory next to the compiled launcher. It contains the OCTolyzer source, figures, and default configuration. See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
+The build creates one distributable: `OCTolyzerGUI.exe` on Windows, `OCTolyzerGUI.app` on macOS, and `OCTolyzerGUI.AppImage` on Linux. Linux builds require `appimagetool` on `PATH`. Nuitka builds are platform-specific and require a native C compiler. The OCTolyzer source, figures, and default configuration are embedded in the launcher. See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
 
 ---
 

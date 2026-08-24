@@ -27,15 +27,40 @@ jobs:
       - name: Install GUI build dependencies
         run: python -m pip install -r requirements-gui.txt
 
+      - name: Install AppImage tooling
+        if: runner.os == 'Linux'
+        run: |
+          # Nuitka's standalone/onefile mode shells out to patchelf to rewrite
+          # RPATH on Linux and sysexits if it isn't on PATH; unlike ccache or
+          # appimagetool, Nuitka does not fetch it automatically.
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+          curl -L --fail --show-error --silent \
+            -o appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          echo "$PWD" >> "$GITHUB_PATH"
+          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+
       - name: Run lightweight tests
         run: python -m unittest discover -s tests -p "test_config_loader.py"
 
-      - name: Build standalone launcher
+      - name: Build single-file launcher
         run: python -m build.build_gui --clean --output-dir dist/gui
+
+      - name: Zip macOS app bundle
+        if: runner.os == 'macOS'
+        # actions/upload-artifact flattens the directory it's pointed at, which
+        # would strip the OCTolyzerGUI.app wrapper and upload its raw Contents/
+        # instead of a bundle Finder recognizes. Zip it ourselves (ditto preserves
+        # the bundle structure/resource forks) and upload that single file instead.
+        run: |
+          cd dist/gui
+          ditto -c -k --sequesterRsrc --keepParent OCTolyzerGUI.app OCTolyzerGUI.app.zip
 
       - name: Upload launcher
         uses: actions/upload-artifact@v4
         with:
           name: OCTolyzerGUI-${{ matrix.os }}
-          path: dist/gui/
+          path: ${{ matrix.os == 'windows-latest' && 'dist/gui/OCTolyzerGUI.exe' || matrix.os == 'macos-latest' && 'dist/gui/OCTolyzerGUI.app.zip' || 'dist/gui/OCTolyzerGUI.AppImage' }}
           if-no-files-found: error

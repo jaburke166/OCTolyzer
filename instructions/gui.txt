@@ -26,13 +26,13 @@ Using a packaged build
 
 Build the launcher on the target operating system. Nuitka builds are platform-specific and require a native C compiler.
 
-When building from an Anaconda environment on Linux, install the static Python library and ELF patching tool first:
+When building from an Anaconda environment on Linux, install the static Python library and ELF patching tool first. Install `appimagetool` separately and put it on `PATH`:
 
     conda install -n oct-analysis libpython-static patchelf
 
     python -m build.build_gui --clean
 
-The output is a standalone directory under dist/gui. Keep the runtime directory next to the compiled launcher. The runtime contains the OCTolyzer source, figures, and default config.txt.
+On Windows the output is `dist/gui/OCTolyzerGUI.exe`. On macOS it is the native app bundle `dist/gui/OCTolyzerGUI.app`. On Linux it is `dist/gui/OCTolyzerGUI.AppImage`; install `appimagetool` before building. Each output contains the OCTolyzer source, figures, and default config.txt.
 
 Workflow
 --------
@@ -60,5 +60,5 @@ Troubleshooting
 - If no environment is listed, install Python or Miniconda and refresh.
 - If packages are missing, select an environment with requirements.txt installed.
 - If the input folder contains no .vol files, choose the folder containing the Heidelberg scans.
-- If a packaged build cannot find its runtime, restore the runtime directory beside the compiled launcher.
+- If a packaged build cannot find its runtime, rebuild it after checking that the Nuitka build completed successfully.
 - For an analysis failure, keep the processing log and the output folder when reporting the problem.

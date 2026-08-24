@@ -32,6 +32,7 @@ def build_launcher(output_directory: Path, *, clean: bool = False) -> Path:
         "-m",
         "nuitka",
         "--mode=standalone",
+        "--assume-yes-for-downloads",
         "--enable-plugin=pyside6",
         "--include-package=gui",
         "--nofollow-import-to=octolyzer.analyse",

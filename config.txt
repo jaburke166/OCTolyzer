@@ -2,10 +2,10 @@
 # MAKE SURE NAMES AND INPUTS ARE SEPARATED WITH ": " [colon-spacebar]
 
 # These paths are relative to this configuration file so the launcher works from any location.
-analysis_directory: demo/input
+analysis_directory:
 
 # This is the folder which will save all results into
-output_directory: demo/output
+output_directory:
 
 --------------------------------------------------------------------------------------------------------
 

@@ -275,6 +275,7 @@ class ConfigEditor(QWidget):
         config = validate_config(
             self._template_values(),
             check_analysis_directory=False,
+            require_directories=False,
         )
         self.set_config(config)
 
@@ -284,6 +285,8 @@ class ConfigEditor(QWidget):
         values = parse_config(self.template_path)
         template_root = self.template_path.expanduser().resolve().parent
         for key in ("analysis_directory", "output_directory"):
+            if not values[key]:
+                continue
             path = Path(values[key]).expanduser()
             if not path.is_absolute():
                 values[key] = str((template_root / path).resolve())
@@ -301,16 +304,22 @@ class ConfigEditor(QWidget):
                 widget.valueChanged.connect(self._validate_inline)
 
     def _update_path_status(self, key: str, line_edit: QLineEdit) -> None:
-        path = Path(line_edit.text().strip()).expanduser()
         has_value = bool(line_edit.text().strip())
-        valid = path.is_dir() if key == "analysis_directory" else has_value
+        path = Path(line_edit.text().strip()).expanduser()
+        valid = has_value and path.is_dir() if key == "analysis_directory" else has_value
         line_edit.setProperty("invalid", not valid)
         line_edit.style().unpolish(line_edit)
         line_edit.style().polish(line_edit)
         if key == "analysis_directory":
-            status = "Folder found" if valid else "Choose an existing folder"
+            if not has_value:
+                status = "Choose a folder"
+            else:
+                status = "Folder found" if valid else "Choose an existing folder"
         else:
-            status = "Folder found" if path.is_dir() else "Will be created"
+            if not has_value:
+                status = "Choose a folder"
+            else:
+                status = "Folder found" if path.is_dir() else "Will be created"
         self.path_status_labels[key].setText(status)
         self.path_status_labels[key].setProperty("valid", valid)
         self._validate_inline()

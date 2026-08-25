@@ -85,11 +85,11 @@ class GuiWidgetTests(unittest.TestCase):
         self.assertEqual(editor.widgets["choroid_measure_type"].currentText(), "perpendicular")
         editor.deleteLater()
 
-    def test_template_paths_are_relative_to_octolyzer_root(self):
+    def test_template_paths_are_empty_by_default(self):
         editor = ConfigEditor(Path("config.txt"))
 
-        self.assertEqual(editor.values()["analysis_directory"], str(Path.cwd() / "demo" / "input"))
-        self.assertEqual(editor.values()["output_directory"], str(Path.cwd() / "demo" / "output"))
+        self.assertEqual(editor.values()["analysis_directory"], "")
+        self.assertEqual(editor.values()["output_directory"], "")
         editor.deleteLater()
 
     def test_config_editor_uses_compact_map_control_and_inline_path_validation(self):
@@ -123,7 +123,15 @@ class GuiWidgetTests(unittest.TestCase):
         self.assertEqual(window.discovery_thread, None)
         self.assertGreater(len(window.candidates), 0)
         self.assertNotIn("|", window.environment_combo.currentText())
-        self.assertTrue(window.run_button.isEnabled())
+        # Input/output folders are blank by default, so the run button stays
+        # disabled until the user fills in both paths.
+        self.assertFalse(window.run_button.isEnabled())
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            window.config_editor.widgets["analysis_directory"].line_edit.setText(temporary_directory)
+            output_directory = str(Path(temporary_directory) / "output")
+            window.config_editor.widgets["output_directory"].line_edit.setText(output_directory)
+            self.application.processEvents()
+            self.assertTrue(window.run_button.isEnabled())
         self.assertEqual(window.main_splitter.orientation(), Qt.Orientation.Horizontal)
         window.resize(1440, 760)
         window.show()
@@ -152,11 +160,17 @@ class GuiWidgetTests(unittest.TestCase):
             loop.exec()
         self.application.processEvents()
 
-        window.current_probe = None
-        window._config_valid = True
-        window._update_ready_state()
-        with patch.object(window, "check_environment") as check_environment:
-            window.run_analysis()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            window.config_editor.widgets["analysis_directory"].line_edit.setText(temporary_directory)
+            output_directory = str(Path(temporary_directory) / "output")
+            window.config_editor.widgets["output_directory"].line_edit.setText(output_directory)
+            self.application.processEvents()
+
+            window.current_probe = None
+            window._config_valid = True
+            window._update_ready_state()
+            with patch.object(window, "check_environment") as check_environment:
+                window.run_analysis()
 
         check_environment.assert_called_once_with()
         self.assertTrue(window._run_after_environment_check)

@@ -180,8 +180,14 @@ def validate_config(
     values: Mapping[str, object] | Config,
     *,
     check_analysis_directory: bool = True,
+    require_directories: bool = True,
 ) -> Config:
-    """Validate raw configuration values and return a typed ``Config``."""
+    """Validate raw configuration values and return a typed ``Config``.
+
+    ``require_directories`` can be set to ``False`` to allow ``analysis_directory``
+    and ``output_directory`` to be blank, e.g. when building the initial, unset
+    state of the configuration editor rather than validating a run-ready config.
+    """
     if isinstance(values, Config):
         raw_values = values.as_values()
     else:
@@ -198,7 +204,7 @@ def validate_config(
     directory_values: dict[str, str] = {}
     for key in DIRECTORY_KEYS:
         value = str(raw_values[key]).strip()
-        if not value:
+        if not value and require_directories:
             errors.append(f"'{key}' cannot be empty.")
         directory_values[key] = value
 

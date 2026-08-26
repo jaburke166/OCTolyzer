@@ -154,6 +154,45 @@ class GuiSupportTests(unittest.TestCase):
             with patch.dict(os.environ, {"OCTOLYZER_CACHE_DIR": temporary_directory}):
                 self.assertEqual(_bootstrapped_environment(), [])
 
+    def test_bootstrapped_environment_wins_symlink_collision_with_bare_interpreter(self):
+        # Regression test for the bug this shipped with: a venv's bin/python
+        # is a symlink chain that resolves to the exact same real file as
+        # the bare interpreter it was built from, and _managed_environments()
+        # independently discovers that same bare interpreter under
+        # ~/.local/share/uv/python/. _deduplicate_candidates() resolves
+        # symlinks and keeps whichever candidate it sees *first* when two
+        # collide on the same real file -- this locks in that the populated
+        # venv wins that tie-break, not the bare, package-less interpreter.
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            cache_directory = Path(temporary_directory) / "cache"
+            home_directory = Path(temporary_directory) / "home"
+
+            managed_root = (
+                home_directory / ".local" / "share" / "uv" / "python" / "cpython-3.11.16-linux-x86_64-gnu"
+            )
+            (managed_root / "bin").mkdir(parents=True)
+            real_binary = managed_root / "bin" / "python3.11"
+            real_binary.touch()
+            (managed_root / "bin" / "python").symlink_to(real_binary)
+
+            runtime_env = cache_directory / "runtime-env"
+            (runtime_env / "bin").mkdir(parents=True)
+            (runtime_env / "bin" / "python").symlink_to(real_binary)
+
+            with patch.dict(
+                os.environ,
+                {"HOME": str(home_directory), "OCTOLYZER_CACHE_DIR": str(cache_directory)},
+                clear=True,
+            ), patch("gui.environment._conda_environments", return_value=[]), patch(
+                "gui.environment._system_python_environments", return_value=[]
+            ), patch("gui.environment._workspace_environments", return_value=[]):
+                discovered = discover_environments(workspace_root=temporary_directory)
+
+            matching = [candidate for candidate in discovered if candidate.executable == real_binary.resolve()]
+            self.assertEqual(len(matching), 1, "the bare interpreter and the venv must collapse into one entry")
+            self.assertEqual(matching[0].label, "OCTolyzer (auto-installed)")
+            self.assertEqual(matching[0].source, "bootstrap")
+
 
 if __name__ == "__main__":
     unittest.main()

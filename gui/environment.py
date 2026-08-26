@@ -149,9 +149,18 @@ def discover_environments(
             candidates.append(EnvironmentCandidate(executable, label, source))
 
     candidates.extend(_conda_environments())
+    # Before _managed_environments(): _deduplicate_candidates() below fully
+    # resolves symlinks and keeps whichever candidate it sees *first* when
+    # two resolve to the same real file. A venv's bin/python is a symlink
+    # chain that resolves to the exact same physical interpreter binary as
+    # the bare Python it was built from -- so the bootstrapped venv and the
+    # "uv: <interpreter>" entry _managed_environments() finds under
+    # ~/.local/share/uv/python/ collide, and whichever comes first wins.
+    # The populated venv has to win that tie-break, not the bare interpreter
+    # it happens to share a binary with.
+    candidates.extend(_bootstrapped_environment())
     candidates.extend(_managed_environments())
     candidates.extend(_system_python_environments())
-    candidates.extend(_bootstrapped_environment())
 
     unique = _deduplicate_candidates(candidates)
     save_discovery_cache(unique)

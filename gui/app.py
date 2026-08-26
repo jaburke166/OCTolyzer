@@ -725,8 +725,15 @@ class MainWindow(QMainWindow):
         self.browse_button.setEnabled(not busy)
         self.refresh_button.setEnabled(not busy and self.discovery_thread is None)
         self.probe_button.setEnabled(bool(candidate) and not busy)
+        # SELECTED covers the common case of a bare system Python being
+        # discovered (e.g. /usr/bin/python3 on most Linux desktops): a
+        # candidate exists but hasn't been checked yet, so without this the
+        # button stayed hidden until the user manually clicked "Check
+        # environment" and it turned out incompatible -- looking, from a
+        # first launch, like there was no automatic setup option at all.
         self.bootstrap_button.setVisible(
-            self.ui_state in {UiState.NO_ENVIRONMENT, UiState.INCOMPATIBLE} and not bootstrapping
+            self.ui_state in {UiState.NO_ENVIRONMENT, UiState.SELECTED, UiState.INCOMPATIBLE}
+            and not bootstrapping
         )
         self.bootstrap_button.setEnabled(not busy)
         self.cancel_bootstrap_button.setVisible(bootstrapping)

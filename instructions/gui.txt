@@ -30,9 +30,33 @@ When building from an Anaconda environment on Linux, install the static Python l
 
     conda install -n oct-analysis libpython-static patchelf
 
-    python -m build.build_gui --clean
+    python -m build.build_gui --clean --product-version 1.2.3
 
-On Windows the output is `dist/gui/OCTolyzerGUI.exe`. On macOS it is the native app bundle `dist/gui/OCTolyzerGUI.app`. On Linux it is `dist/gui/OCTolyzerGUI.AppImage`; install `appimagetool` before building. Each output contains the OCTolyzer source, figures, and default config.txt.
+On Windows the output is `dist/gui/OCTolyzerGUI.exe`. On macOS it is the native app bundle `dist/gui/OCTolyzerGUI.app`. On Linux it is `dist/gui/OCTolyzerGUI.AppImage`; install `appimagetool` before building. Each output contains the OCTolyzer source, figures, default config.txt, requirements.txt, and gui/assets (the app icon). `--product-version` defaults to `0.0.0-dev`; the CI workflow derives it from the pushed git tag.
+
+The launcher itself is not an "installer" a typical user double-clicks and forgets -- see the next section for wrapping it into one per OS. End users should generally download the wrapped installer from GitHub Releases rather than the raw Nuitka output.
+
+Building the installers
+------------------------
+
+These wrap the Nuitka artifact above into something with a Start Menu entry, an uninstaller, or a drag-to-Applications experience. None of this requires paid tooling -- the app ships unsigned, so installing still shows a one-time OS security warning (documented in README.md).
+
+Windows (Inno Setup):
+
+    choco install innosetup -y --no-progress   # or download from jrsoftware.org
+    ISCC installer\windows\octolyzer.iss /DAppVersion=1.2.3
+
+Produces `dist/gui/installer/OCTolyzerSetup.exe`. The script (`installer/windows/octolyzer.iss`) installs per-machine under Program Files (`PrivilegesRequired=admin`, so it triggers a UAC prompt) using a fixed `AppId` GUID -- do not change that GUID; it is what lets a new version upgrade in place instead of installing side-by-side.
+
+macOS (hdiutil, built in -- no extra tooling needed):
+
+    bash installer/macos/build_dmg.sh dist/gui/OCTolyzerGUI.app dist/gui/OCTolyzer.dmg OCTolyzer
+
+Produces a plain, unsigned `.dmg` containing the app bundle plus an `/Applications` symlink for drag-and-drop installation.
+
+Linux: the AppImage produced by `build.build_gui` above is the distributable as-is; no additional wrapping step exists yet (a `.deb` is a documented possible follow-up, not currently built).
+
+The `.github/workflows/build-gui.yml` CI workflow runs all of the above per OS and, on a `v*` tag push, publishes a GitHub Release attaching the three installers.
 
 Workflow
 --------
@@ -47,18 +71,31 @@ Workflow
 
 The GUI creates a temporary configuration for each run. The selected configuration is copied by OCTolyzer into the output folder as configuration_used.txt. The repository config.txt is changed only when the user explicitly saves a configuration there.
 
+Automatic environment setup
+----------------------------
+
+If no compatible environment is found or the selected one is missing packages, a "Set up environment automatically" button appears (gui/bootstrap.py, wired into gui/app.py's BootstrapWorker). It downloads a pinned release of `uv` (https://github.com/astral-sh/uv), verifies its checksum, uses it to install a managed Python 3.11 and create a dedicated virtual environment, then installs `torch`/`torchvision` followed by the rest of requirements.txt into it. This requires an internet connection and downloads several GB; progress streams into the processing log and the operation can be cancelled from the GUI at any point. The resulting environment is handed back into the normal discovery/probe flow (source "uv" in the environment picker), the same as any conda/venv/pyenv environment the GUI would have found on its own.
+
+Where things are cached (override the whole root with OCTOLYZER_CACHE_DIR):
+
+- The downloaded `uv` binary: `<cache dir>/bootstrap/uv/` (`%LOCALAPPDATA%\OCTolyzer` on Windows, `~/.cache/octolyzer` elsewhere).
+- The created environment: `<cache dir>/runtime-env/`.
+
+To force a clean re-bootstrap, delete `runtime-env` (and `bootstrap/uv` if you also want to re-verify/re-download `uv` itself) and click "Set up environment automatically" again.
+
+The GUI does not select CUDA vs. CPU-only torch, or detect a GPU -- `torch`/`torchvision` are installed from the default PyPI index, which on Windows/Linux includes CUDA support and runs CPU-only when no compatible GPU is present (the same runtime device-selection the GUI already probes via torch.cuda.is_available()/torch.backends.mps). Anyone wanting a specific CUDA build, an offline setup, or full control over the environment should use the manual conda instructions in the main README instead of the automatic setup.
+
 Models and network access
 -------------------------
 
 OCTolyzer model weights are downloaded by the selected processing environment the first time the models are used. The first run therefore requires network access unless the model weights are already cached. A failed model download is reported in the processing log.
 
-The GUI does not install Conda environments, GPU drivers, or model weights automatically. If no compatible environment is found, install the scientific requirements in a Python 3.11 environment and refresh the list.
-
 Troubleshooting
 ---------------
 
-- If no environment is listed, install Python or Miniconda and refresh.
-- If packages are missing, select an environment with requirements.txt installed.
+- If no environment is listed, either click "Set up environment automatically" (see above) or install Python/Miniconda yourself and refresh.
+- If packages are missing, select an environment with requirements.txt installed, or use the automatic setup.
 - If the input folder contains no .vol files, choose the folder containing the Heidelberg scans.
 - If a packaged build cannot find its runtime, rebuild it after checking that the Nuitka build completed successfully.
+- If automatic setup fails, check the processing log for the reported error (network failure, checksum mismatch, unsupported OS/architecture) and remediation text; delete `<cache dir>/runtime-env` before retrying if a previous attempt was interrupted mid-install.
 - For an analysis failure, keep the processing log and the output folder when reporting the problem.

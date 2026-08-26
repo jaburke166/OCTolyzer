@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -13,11 +14,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BUILD_DIRECTORY = ROOT / "dist" / "gui"
-RUNTIME_DIRECTORIES = ("octolyzer", "figures")
+# gui/assets is bundled alongside octolyzer/figures so MainWindow can resolve
+# its window icon (gui/app.py:_apply_window_icon) the same way in dev
+# checkouts and frozen Nuitka builds -- both look under the runtime payload.
+RUNTIME_DIRECTORIES = ("octolyzer", "figures", "gui/assets")
+DEFAULT_PRODUCT_VERSION = "0.0.0-dev"
 LAUNCHER_NAME = "OCTolyzerGUI"
+ICON_ICO = ROOT / "gui" / "assets" / "icon.ico"
+ICON_ICNS = ROOT / "gui" / "assets" / "icon.icns"
 
 
-def build_launcher(output_directory: Path, *, clean: bool = False) -> Path:
+def build_launcher(
+    output_directory: Path,
+    *,
+    clean: bool = False,
+    product_version: str = DEFAULT_PRODUCT_VERSION,
+) -> Path:
     output_directory = output_directory.expanduser().resolve()
     output_directory.mkdir(parents=True, exist_ok=True)
     if clean:
@@ -60,12 +72,18 @@ def build_launcher(output_directory: Path, *, clean: bool = False) -> Path:
         f"--include-raw-dir={staged_runtime}=runtime",
         f"--report={report_path}",
         "--product-name=OCTolyzer",
-        "--product-version=1.0.0",
+        # Windows PE version resources require a numeric dotted version, so a
+        # tag like v1.2.3-rc1 is normalized before reaching Nuitka.
+        f"--product-version={_numeric_product_version(product_version)}",
         "--file-description=OCTolyzer desktop launcher",
         str(ROOT / "gui" / "app.py"),
     ]
     if os.name == "nt":
         command.append("--windows-console-mode=disable")
+        if ICON_ICO.is_file():
+            command.append(f"--windows-icon-from-ico={ICON_ICO}")
+    if sys.platform == "darwin" and ICON_ICNS.is_file():
+        command.append(f"--macos-app-icon={ICON_ICNS}")
 
     subprocess.run(command, cwd=ROOT, check=True)
     shutil.rmtree(staged_runtime)
@@ -103,6 +121,16 @@ def _copy_runtime_payload(runtime_directory: Path) -> None:
             ROOT / directory_name, runtime_directory / directory_name, ignore=ignore_cache
         )
     shutil.copy2(ROOT / "config.txt", runtime_directory / "config.txt")
+    # Bundled so the auto-bootstrap flow (gui/bootstrap.py) can install the
+    # exact pinned dependency set even when the user has no git checkout --
+    # only the installed app itself.
+    shutil.copy2(ROOT / "requirements.txt", runtime_directory / "requirements.txt")
+
+
+def _numeric_product_version(version: str) -> str:
+    """Reduce a version string (e.g. a git tag) to Windows PE's N.N.N.N form."""
+    match = re.match(r"v?(\d+(?:\.\d+){0,3})", version)
+    return match.group(1) if match else "0.0.0"
 
 
 def _create_linux_appimage(executable: Path, output_directory: Path) -> Path:
@@ -121,10 +149,15 @@ def _create_linux_appimage(executable: Path, output_directory: Path) -> Path:
             "Type=Application\nCategories=Science;\n",
             encoding="utf-8",
         )
-        (app_dir / "OCTolyzer.svg").write_text(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"/>\n",
-            encoding="utf-8",
-        )
+        icon_source = ROOT / "gui" / "assets" / "icon-256.png"
+        if icon_source.is_file():
+            # appimagetool looks for the icon named after the .desktop file's
+            # Icon= key at the AppDir root; also install it into the standard
+            # hicolor theme path for desktop environments that read that instead.
+            shutil.copy2(icon_source, app_dir / "OCTolyzer.png")
+            themed_icon_directory = app_dir / "usr" / "share" / "icons" / "hicolor" / "256x256" / "apps"
+            themed_icon_directory.mkdir(parents=True)
+            shutil.copy2(icon_source, themed_icon_directory / "OCTolyzer.png")
         subprocess.run([appimagetool, str(app_dir), str(appimage)], check=True)
     executable.unlink()
     return appimage
@@ -143,8 +176,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Remove previous Nuitka distribution and compiler outputs before compiling.",
     )
+    parser.add_argument(
+        "--product-version",
+        default=DEFAULT_PRODUCT_VERSION,
+        help="Version to embed in the built artifact (e.g. a git tag with the leading 'v' stripped).",
+    )
     arguments = parser.parse_args(argv)
-    artifact = build_launcher(arguments.output_dir, clean=arguments.clean)
+    artifact = build_launcher(
+        arguments.output_dir,
+        clean=arguments.clean,
+        product_version=arguments.product_version,
+    )
     print(f"Built OCTolyzer GUI artifact: {artifact}")
     return 0
 

@@ -5,22 +5,24 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
 from enum import Enum
 from pathlib import Path
 
 from PySide6.QtCore import (QObject, QSettings, Qt, QThread, QTimer, QUrl,
                             Signal)
-from PySide6.QtGui import QDesktopServices, QKeySequence
+from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout,
                                QLabel, QMainWindow, QMessageBox,
                                QPlainTextEdit, QProgressBar, QPushButton,
                                QSplitter, QStyle, QVBoxLayout, QWidget)
 
+from gui.bootstrap import BootstrapCancelled, BootstrapError, BootstrapStage, run_bootstrap
 from gui.config_editor import ConfigEditor, ModernComboBox
 from gui.environment import (EnvironmentCandidate, EnvironmentProbe,
                              discover_environments, load_cached_environments,
                              load_cached_probe, probe_environment,
-                             save_probe_cache)
+                             save_discovery_cache, save_probe_cache)
 from gui.runner import ProcessRunner
 from octolyzer.config_loader import ConfigError, write_config
 
@@ -335,6 +337,7 @@ class UiState(str, Enum):
     SELECTED = "selected"
     CHECKING = "checking"
     INCOMPATIBLE = "incompatible"
+    BOOTSTRAPPING = "bootstrapping"
     READY = "ready"
     RUNNING = "running"
     STOPPING = "stopping"
@@ -371,6 +374,45 @@ class DiscoveryWorker(QObject):
         self.finished.emit(discover_environments(self.workspace_roots))
 
 
+class BootstrapWorker(QObject):
+    """Run the automatic environment setup (gui/bootstrap.py) off the Qt event loop."""
+
+    stage_changed = Signal(str)
+    output_received = Signal(str)
+    progress = Signal(int, int)
+    completed = Signal(object)
+    failed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(self, requirements_path: Path):
+        super().__init__()
+        self.requirements_path = requirements_path
+        self._cancel_flag = threading.Event()
+
+    def run(self) -> None:
+        try:
+            candidate = run_bootstrap(
+                requirements_path=self.requirements_path,
+                on_stage=lambda stage: self.stage_changed.emit(stage.value),
+                on_output=self.output_received.emit,
+                on_progress=lambda read, total: self.progress.emit(read, total),
+                cancel_flag=self._cancel_flag,
+            )
+        except BootstrapCancelled:
+            self.cancelled.emit()
+            return
+        except BootstrapError as error:
+            self.failed.emit(str(error))
+            return
+        except Exception as error:  # noqa: BLE001 - surface unexpected failures instead of crashing the thread
+            self.failed.emit(str(error))
+            return
+        self.completed.emit(candidate)
+
+    def cancel(self) -> None:
+        self._cancel_flag.set()
+
+
 class MainWindow(QMainWindow):
     """Single-window workflow for configuring and starting OCTolyzer."""
 
@@ -386,6 +428,8 @@ class MainWindow(QMainWindow):
         self.probe_thread: QThread | None = None
         self.probe_worker: ProbeWorker | None = None
         self.probing_executable: Path | None = None
+        self.bootstrap_thread: QThread | None = None
+        self.bootstrap_worker: BootstrapWorker | None = None
         self._run_after_environment_check = False
         self.run_directory: tempfile.TemporaryDirectory[str] | None = None
         configured_workspace = os.environ.get("OCTOLYZER_WORKSPACE")
@@ -399,6 +443,7 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         self.setWindowTitle("OCTolyzer")
+        self._apply_window_icon()
         screen = QApplication.primaryScreen()
         if screen is None:
             self.setMinimumSize(900, 680)
@@ -477,6 +522,20 @@ class MainWindow(QMainWindow):
         self.environment_progress.setTextVisible(False)
         self.environment_progress.setVisible(False)
         environment_layout.addLayout(environment_row)
+        bootstrap_row = QHBoxLayout()
+        bootstrap_row.setSpacing(8)
+        self.bootstrap_button = QPushButton("Set up environment automatically")
+        self.bootstrap_button.setToolTip(
+            "Download a Python environment manager and install OCTolyzer's dependencies "
+            "automatically. Requires an internet connection and can take several minutes."
+        )
+        self.bootstrap_button.setVisible(False)
+        self.cancel_bootstrap_button = QPushButton("Cancel setup")
+        self.cancel_bootstrap_button.setVisible(False)
+        bootstrap_row.addWidget(self.bootstrap_button)
+        bootstrap_row.addWidget(self.cancel_bootstrap_button)
+        bootstrap_row.addStretch(1)
+        environment_layout.addLayout(bootstrap_row)
         environment_details = QHBoxLayout()
         environment_details.setSpacing(10)
         environment_details.addWidget(self.environment_source_label)
@@ -571,6 +630,8 @@ class MainWindow(QMainWindow):
         self.browse_button.clicked.connect(self.browse_environment)
         self.environment_combo.currentIndexChanged.connect(self._environment_changed)
         self.probe_button.clicked.connect(self.check_environment)
+        self.bootstrap_button.clicked.connect(self.start_bootstrap)
+        self.cancel_bootstrap_button.clicked.connect(self.cancel_bootstrap)
         self.config_editor.save_button.clicked.connect(self.save_configuration)
         self.config_editor.validation_changed.connect(self._configuration_validity_changed)
         self.run_button.clicked.connect(self.run_analysis)
@@ -620,6 +681,7 @@ class MainWindow(QMainWindow):
             UiState.SELECTED: "CHECK REQUIRED",
             UiState.CHECKING: "CHECKING",
             UiState.INCOMPATIBLE: "NOT READY",
+            UiState.BOOTSTRAPPING: "SETTING UP",
             UiState.READY: "READY TO RUN",
             UiState.RUNNING: "RUNNING",
             UiState.STOPPING: "STOPPING",
@@ -632,6 +694,7 @@ class MainWindow(QMainWindow):
             UiState.SELECTED: "Check the selected environment before running.",
             UiState.CHECKING: "Checking scientific dependencies in the selected environment...",
             UiState.INCOMPATIBLE: "Resolve the missing dependencies before running analysis.",
+            UiState.BOOTSTRAPPING: "Setting up a processing environment automatically...",
             UiState.READY: "Environment and configuration are ready.",
             UiState.RUNNING: "Analysis is running. Live output is shown below.",
             UiState.STOPPING: "Waiting for the analysis process to stop...",
@@ -647,18 +710,26 @@ class MainWindow(QMainWindow):
         self.activity_label.setText(activity_text[state])
         self.statusBar().showMessage(activity_text[state])
         self.environment_progress.setVisible(
-            state in {UiState.DISCOVERING, UiState.CHECKING, UiState.RUNNING, UiState.STOPPING}
+            state in {UiState.DISCOVERING, UiState.CHECKING, UiState.RUNNING, UiState.STOPPING, UiState.BOOTSTRAPPING}
         )
         self._update_action_state()
 
     def _update_action_state(self) -> None:
         candidate = self._selected_candidate()
-        busy = self.ui_state in {UiState.DISCOVERING, UiState.CHECKING, UiState.RUNNING, UiState.STOPPING}
+        busy = self.ui_state in {
+            UiState.DISCOVERING, UiState.CHECKING, UiState.RUNNING, UiState.STOPPING, UiState.BOOTSTRAPPING,
+        }
         running = self.ui_state in {UiState.RUNNING, UiState.STOPPING}
+        bootstrapping = self.ui_state == UiState.BOOTSTRAPPING
         self.environment_combo.setEnabled(not busy and bool(self.candidates))
         self.browse_button.setEnabled(not busy)
         self.refresh_button.setEnabled(not busy and self.discovery_thread is None)
         self.probe_button.setEnabled(bool(candidate) and not busy)
+        self.bootstrap_button.setVisible(
+            self.ui_state in {UiState.NO_ENVIRONMENT, UiState.INCOMPATIBLE} and not bootstrapping
+        )
+        self.bootstrap_button.setEnabled(not busy)
+        self.cancel_bootstrap_button.setVisible(bootstrapping)
         self.config_editor.setEnabled(not running)
         self.run_button.setEnabled(
             self.ui_state not in {
@@ -705,6 +776,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(title_label)
         layout.addWidget(subtitle_label)
         return container
+
+    def _apply_window_icon(self) -> None:
+        # Bundled the same way as config.txt: build/build_gui.py stages
+        # gui/assets alongside octolyzer/figures in the runtime payload, so
+        # this path resolves correctly in both dev checkouts and frozen
+        # Nuitka builds (see find_runtime_root()).
+        icon_path = self.runtime_root / "gui" / "assets" / "icon-256.png"
+        if icon_path.is_file():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
     def _set_standard_icon(self, button: QPushButton, icon: QStyle.StandardPixmap) -> None:
         button.setIcon(self.style().standardIcon(icon))
@@ -899,6 +979,92 @@ class MainWindow(QMainWindow):
             return
         self.run_analysis()
 
+    def start_bootstrap(self) -> None:
+        if self.bootstrap_thread is not None:
+            return
+        requirements_path = self.runtime_root / "requirements.txt"
+        if not requirements_path.is_file():
+            QMessageBox.critical(
+                self,
+                "Unable to set up environment",
+                f"Could not find requirements.txt in the runtime payload ({requirements_path}).",
+            )
+            return
+        answer = QMessageBox.question(
+            self,
+            "Set up environment automatically",
+            "OCTolyzer will download a Python environment manager and install its "
+            "scientific dependencies (roughly 2-3GB). This requires an internet "
+            "connection and can take several minutes. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self.log_view.clear()
+        self._set_ui_state(UiState.BOOTSTRAPPING, "Setting up a processing environment automatically...")
+        bootstrap_thread = QThread(self)
+        self.bootstrap_thread = bootstrap_thread
+        worker = BootstrapWorker(requirements_path)
+        self.bootstrap_worker = worker
+        worker.moveToThread(bootstrap_thread)
+        bootstrap_thread.started.connect(worker.run)
+        worker.stage_changed.connect(self._bootstrap_stage_changed)
+        worker.output_received.connect(self._append_log)
+        worker.completed.connect(self._bootstrap_completed)
+        worker.failed.connect(self._bootstrap_failed)
+        worker.cancelled.connect(self._bootstrap_cancelled)
+        for signal in (worker.completed, worker.failed, worker.cancelled):
+            signal.connect(bootstrap_thread.quit)
+            signal.connect(worker.deleteLater)
+        bootstrap_thread.finished.connect(self._bootstrap_thread_finished)
+        bootstrap_thread.finished.connect(bootstrap_thread.deleteLater)
+        bootstrap_thread.start()
+
+    def cancel_bootstrap(self) -> None:
+        if self.bootstrap_worker is not None:
+            self.bootstrap_worker.cancel()
+            self._set_ui_state(UiState.BOOTSTRAPPING, "Cancelling setup...")
+
+    def _bootstrap_stage_changed(self, stage: str) -> None:
+        messages = {
+            BootstrapStage.CHECKING_TOOLS.value: "Checking for an existing environment manager...",
+            BootstrapStage.DOWNLOADING_MANAGER.value: "Downloading environment manager...",
+            BootstrapStage.INSTALLING_PYTHON.value: "Installing Python...",
+            BootstrapStage.CREATING_ENVIRONMENT.value: "Creating the processing environment...",
+            BootstrapStage.INSTALLING_PACKAGES.value: "Installing OCTolyzer's dependencies (this can take several minutes)...",
+            BootstrapStage.VERIFYING.value: "Verifying the new environment...",
+        }
+        message = messages.get(stage)
+        if message:
+            self._set_ui_state(UiState.BOOTSTRAPPING, message)
+
+    def _bootstrap_completed(self, candidate: EnvironmentCandidate) -> None:
+        self.candidates.insert(0, candidate)
+        self.environment_combo.blockSignals(True)
+        self.environment_combo.insertItem(0, candidate.label, candidate)
+        self.environment_combo.setCurrentIndex(0)
+        self.environment_combo.blockSignals(False)
+        save_discovery_cache(self.candidates)
+        self._update_environment_details()
+        self._set_ui_state(UiState.SELECTED, f"Environment ready at {candidate.executable}. Checking dependencies...")
+        self.check_environment(force=True)
+
+    def _bootstrap_failed(self, message: str) -> None:
+        self._append_log(f"\nERROR: {message}\n")
+        fallback_state = UiState.SELECTED if self._selected_candidate() else UiState.NO_ENVIRONMENT
+        self._set_ui_state(fallback_state, message)
+
+    def _bootstrap_cancelled(self) -> None:
+        self._append_log("\nEnvironment setup cancelled.\n")
+        fallback_state = UiState.SELECTED if self._selected_candidate() else UiState.NO_ENVIRONMENT
+        self._set_ui_state(fallback_state, "Environment setup cancelled.")
+
+    def _bootstrap_thread_finished(self) -> None:
+        self.bootstrap_thread = None
+        self.bootstrap_worker = None
+        self._update_action_state()
+
     def _update_environment_details(self) -> None:
         candidate = self._selected_candidate()
         if candidate is None:
@@ -1020,7 +1186,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Unable to start analysis", 5000)
 
     def _wait_for_workers(self) -> None:
-        for thread in (self.discovery_thread, self.probe_thread):
+        if self.bootstrap_worker is not None:
+            self.bootstrap_worker.cancel()
+        for thread in (self.discovery_thread, self.probe_thread, self.bootstrap_thread):
             if thread is not None and thread.isRunning():
                 thread.quit()
                 thread.wait()
@@ -1046,6 +1214,16 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self.runner.stop()
+        if self.bootstrap_thread is not None and self.bootstrap_thread.isRunning():
+            answer = QMessageBox.question(
+                self,
+                "Environment setup is running",
+                "Cancel the automatic environment setup and close OCTolyzer?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
         self._wait_for_workers()
         self.settings.setValue("window_geometry", self.saveGeometry())
         self.settings.setValue("horizontal_splitter_state_v2", self.main_splitter.saveState())

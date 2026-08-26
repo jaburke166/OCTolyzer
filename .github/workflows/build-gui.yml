@@ -24,6 +24,17 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Compute version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.0.0-dev"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Install GUI build dependencies
         run: python -m pip install -r requirements-gui.txt
 
@@ -43,24 +54,54 @@ jobs:
           echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
 
       - name: Run lightweight tests
-        run: python -m unittest discover -s tests -p "test_config_loader.py"
+        # Kept narrow deliberately: the rest of tests/ (test_gui_support.py,
+        # test_gui_widgets.py) has environment-sensitive failures unrelated to
+        # this workflow (e.g. macOS /tmp<->/private/tmp symlink resolution,
+        # host-specific window/splitter sizing) -- confirmed pre-existing, not
+        # something this workflow's changes should paper over by excluding.
+        run: python -m unittest tests.test_config_loader tests.test_gui_bootstrap
 
       - name: Build single-file launcher
-        run: python -m build.build_gui --clean --output-dir dist/gui
+        run: python -m build.build_gui --clean --output-dir dist/gui --product-version "${{ steps.version.outputs.version }}"
 
-      - name: Zip macOS app bundle
-        if: runner.os == 'macOS'
-        # actions/upload-artifact flattens the directory it's pointed at, which
-        # would strip the OCTolyzerGUI.app wrapper and upload its raw Contents/
-        # instead of a bundle Finder recognizes. Zip it ourselves (ditto preserves
-        # the bundle structure/resource forks) and upload that single file instead.
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        run: choco install innosetup -y --no-progress
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
         run: |
-          cd dist/gui
-          ditto -c -k --sequesterRsrc --keepParent OCTolyzerGUI.app OCTolyzerGUI.app.zip
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\windows\octolyzer.iss" "/DAppVersion=${{ steps.version.outputs.version }}"
+
+      - name: Build macOS disk image
+        if: runner.os == 'macOS'
+        run: bash installer/macos/build_dmg.sh dist/gui/OCTolyzerGUI.app dist/gui/OCTolyzer.dmg OCTolyzer
 
       - name: Upload launcher
         uses: actions/upload-artifact@v4
         with:
           name: OCTolyzerGUI-${{ matrix.os }}
-          path: ${{ matrix.os == 'windows-latest' && 'dist/gui/OCTolyzerGUI.exe' || matrix.os == 'macos-latest' && 'dist/gui/OCTolyzerGUI.app.zip' || 'dist/gui/OCTolyzerGUI.AppImage' }}
+          path: ${{ matrix.os == 'windows-latest' && 'dist/gui/installer/OCTolyzerSetup.exe' || matrix.os == 'macos-latest' && 'dist/gui/OCTolyzer.dmg' || 'dist/gui/OCTolyzerGUI.AppImage' }}
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/OCTolyzerGUI-windows-latest/OCTolyzerSetup.exe
+            artifacts/OCTolyzerGUI-macos-latest/OCTolyzer.dmg
+            artifacts/OCTolyzerGUI-ubuntu-latest/OCTolyzerGUI.AppImage
+          generate_release_notes: true

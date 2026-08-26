@@ -19,6 +19,7 @@ See below for a visual description of OCTolyzer's analysis pipeline.
 - [File structure](#file-structure)
 - [Getting started](#getting-started)
     - [Quick start](#quick-start)
+    - [Desktop GUI](#desktop-gui)
 - [OCTolyzer's support](#octolyzers-support)
     - [OCT scan patterns](#oct-scan-patterns)
     - [OS compatibility](#os-compatibility)
@@ -130,13 +131,39 @@ output = analyse.analyse(path, save_path)
 
 OCTolyzer also includes a lightweight cross-platform desktop launcher for users who do not want to edit configuration files or use a terminal. The GUI discovers installed Python environments, checks that the selected environment has the scientific dependencies, provides controls for every `config.txt` field, and starts batch processing while displaying the live log.
 
-The GUI and scientific processing environments are intentionally separate. Install the GUI dependencies in the environment used to build or run the launcher:
+#### Installing
+
+Download the installer for your operating system from the [latest release](https://github.com/jaburke166/OCTolyzer/releases/latest) and run it:
+
+- **Windows**: run `OCTolyzerSetup.exe`. This installs OCTolyzer for all users under Program Files, so it asks for administrator permission (a UAC prompt) once, and adds a Start Menu entry plus an uninstaller.
+- **macOS**: open `OCTolyzer.dmg` and drag `OCTolyzer.app` to the `Applications` shortcut inside it.
+- **Linux**: download `OCTolyzerGUI.AppImage`, make it executable (`chmod +x OCTolyzerGUI.AppImage`), and run it directly. No installation step is required.
+
+#### First launch
+
+OCTolyzer's desktop launcher and its scientific processing environment are intentionally separate (see below), so the very first time you run it, it looks for a compatible Python environment. If none is found, click **"Set up environment automatically"**: the GUI downloads a small Python environment manager, creates a dedicated environment, and installs OCTolyzer's dependencies into it. This requires an internet connection, downloads roughly 2-3GB, and can take several minutes; progress is shown in the log panel and setup can be cancelled at any time. Once it finishes, the new environment is selected automatically and OCTolyzer checks it before you run an analysis.
+
+#### Unsigned application
+
+OCTolyzer's installers are not code-signed, so your operating system will show a one-time warning the first time you run one:
+
+- **Windows**: SmartScreen may show "Windows protected your PC." Click **More info**, then **Run anyway**.
+- **macOS**: Gatekeeper will refuse to open the app the first time. Right-click (or Control-click) `OCTolyzer.app` and choose **Open**, then confirm in the dialog that appears. (Alternatively: System Settings → Privacy & Security → **Open Anyway**.)
+- **Linux**: no warning beyond needing to `chmod +x` the AppImage, as noted above.
+
+#### Advanced: manual / offline / GPU setup
+
+The automatic setup installs a CPU-compatible processing environment over the internet. If you're offline, want a specific Python/CUDA setup, or prefer to manage the environment yourself, follow the manual [Getting started](#getting-started) instructions above to create a conda environment from `requirements.txt`, then select that environment's Python executable in the GUI via **Browse**.
+
+#### Developing / building from source
+
+Install the GUI dependencies in the environment used to build or run the launcher:
 
 ```
 python -m pip install -r requirements-gui.txt
 ```
 
-The selected processing environment must contain the packages in `requirements.txt`. The launcher presents a single-page workflow: choose and check an environment, set paths and grouped analysis options, then run while monitoring the live log. Custom posterior-pole maps are selected through a searchable dialog, and invalid input folders are reported inline. From the repository root, launch the development GUI with:
+From the repository root, launch the development GUI with:
 
 ```
 python -m gui.app
@@ -148,7 +175,7 @@ For a double-clickable distribution, build the launcher on the target operating 
 python -m build.build_gui --clean
 ```
 
-The build creates one distributable: `OCTolyzerGUI.exe` on Windows, `OCTolyzerGUI.app` on macOS, and `OCTolyzerGUI.AppImage` on Linux. Linux builds require `appimagetool` on `PATH`. Nuitka builds are platform-specific and require a native C compiler. The OCTolyzer source, figures, and default configuration are embedded in the launcher. See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
+The build creates one distributable per OS: `OCTolyzerGUI.exe` on Windows, `OCTolyzerGUI.app` on macOS, and `OCTolyzerGUI.AppImage` on Linux, embedding the OCTolyzer source, figures, default configuration, and pinned `requirements.txt`. Linux builds require `appimagetool` on `PATH`; Nuitka builds are platform-specific and require a native C compiler. Wrapping these into the installers described above (Inno Setup on Windows, a `.dmg` on macOS) is a separate step -- see [instructions/gui.txt](instructions/gui.txt) for the complete workflow, installer-build prerequisites, and troubleshooting notes.
 
 ---
 

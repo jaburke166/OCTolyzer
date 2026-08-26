@@ -149,18 +149,17 @@ def discover_environments(
             candidates.append(EnvironmentCandidate(executable, label, source))
 
     candidates.extend(_conda_environments())
-    # Before _managed_environments(): _deduplicate_candidates() below fully
-    # resolves symlinks and keeps whichever candidate it sees *first* when
-    # two resolve to the same real file. A venv's bin/python is a symlink
-    # chain that resolves to the exact same physical interpreter binary as
-    # the bare Python it was built from -- so the bootstrapped venv and the
-    # "uv: <interpreter>" entry _managed_environments() finds under
-    # ~/.local/share/uv/python/ collide, and whichever comes first wins.
-    # The populated venv has to win that tie-break, not the bare interpreter
-    # it happens to share a binary with.
-    candidates.extend(_bootstrapped_environment())
     candidates.extend(_managed_environments())
     candidates.extend(_system_python_environments())
+    # A venv's bin/python is a symlink chain that fully resolves to the
+    # exact same physical interpreter binary as whatever bare interpreter
+    # built it -- e.g. the "python3 on PATH" entry above, or the "uv:
+    # <interpreter>" entry _managed_environments() finds under
+    # ~/.local/share/uv/python/. Scan order here doesn't matter: when that
+    # collision happens, _deduplicate_candidates() is what guarantees the
+    # populated venv wins over whichever generically-labeled interpreter it
+    # happens to share a binary with, not whoever runs first.
+    candidates.extend(_bootstrapped_environment())
 
     unique = _deduplicate_candidates(candidates)
     save_discovery_cache(unique)
@@ -649,16 +648,29 @@ def _which(command: str) -> Path | None:
     return Path(resolved) if resolved else None
 
 
+# Sources that should always win a collision, regardless of scan order: a
+# venv's own interpreter binary is a symlink chain that fully resolves to the
+# exact same real file as whatever bare interpreter created it (uv-managed
+# Python, system Python, pyenv, etc. -- not just one specific source), so
+# relying on which source happens to run first is fragile. Any of these
+# purpose-built, more-informative labels should win over a generic one.
+_PREFERRED_CANDIDATE_SOURCES = frozenset({"manual", "bootstrap"})
+
+
 def _deduplicate_candidates(candidates: list[EnvironmentCandidate]) -> list[EnvironmentCandidate]:
-    unique: list[EnvironmentCandidate] = []
-    seen: set[Path] = set()
+    order: list[Path] = []
+    best: dict[Path, EnvironmentCandidate] = {}
     for candidate in candidates:
         executable = _resolved_path(Path(candidate.executable).expanduser())
-        if executable in seen or not executable.is_file() or _is_ignored_executable(executable):
+        if not executable.is_file() or _is_ignored_executable(executable):
             continue
-        seen.add(executable)
-        unique.append(EnvironmentCandidate(executable, candidate.label, candidate.source))
-    return unique
+        existing = best.get(executable)
+        if existing is None:
+            order.append(executable)
+            best[executable] = EnvironmentCandidate(executable, candidate.label, candidate.source)
+        elif candidate.source in _PREFERRED_CANDIDATE_SOURCES and existing.source not in _PREFERRED_CANDIDATE_SOURCES:
+            best[executable] = EnvironmentCandidate(executable, candidate.label, candidate.source)
+    return [best[executable] for executable in order]
 
 
 def _is_ignored_executable(executable: Path) -> bool:

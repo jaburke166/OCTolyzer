@@ -159,10 +159,9 @@ class GuiSupportTests(unittest.TestCase):
         # is a symlink chain that resolves to the exact same real file as
         # the bare interpreter it was built from, and _managed_environments()
         # independently discovers that same bare interpreter under
-        # ~/.local/share/uv/python/. _deduplicate_candidates() resolves
-        # symlinks and keeps whichever candidate it sees *first* when two
-        # collide on the same real file -- this locks in that the populated
-        # venv wins that tie-break, not the bare, package-less interpreter.
+        # ~/.local/share/uv/python/. This locks in that _deduplicate_candidates()
+        # keeps the populated venv over the bare, package-less interpreter it
+        # collides with, regardless of which one the scan happens to see first.
         with tempfile.TemporaryDirectory() as temporary_directory:
             cache_directory = Path(temporary_directory) / "cache"
             home_directory = Path(temporary_directory) / "home"
@@ -190,6 +189,43 @@ class GuiSupportTests(unittest.TestCase):
 
             matching = [candidate for candidate in discovered if candidate.executable == real_binary.resolve()]
             self.assertEqual(len(matching), 1, "the bare interpreter and the venv must collapse into one entry")
+            self.assertEqual(matching[0].label, "OCTolyzer (auto-installed)")
+            self.assertEqual(matching[0].source, "bootstrap")
+
+    def test_bootstrapped_environment_wins_symlink_collision_with_path_python(self):
+        # The bare-interpreter collision above isn't the only way this can
+        # happen: if the user's PATH includes a uv-managed shim (e.g. after
+        # following uv's own "add ~/.local/bin to PATH" hint), "python3 on
+        # PATH" resolves to that same real binary too -- and that candidate
+        # is collected *before* _bootstrapped_environment() runs, so an
+        # ordering-only fix would not protect against this collision.
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            cache_directory = Path(temporary_directory) / "cache"
+            home_directory = Path(temporary_directory) / "home"
+            real_binary = Path(temporary_directory) / "shim-target" / "python3.11"
+            real_binary.parent.mkdir(parents=True)
+            real_binary.touch()
+
+            runtime_env = cache_directory / "runtime-env"
+            (runtime_env / "bin").mkdir(parents=True)
+            (runtime_env / "bin" / "python").symlink_to(real_binary)
+
+            with patch.dict(
+                os.environ,
+                {"HOME": str(home_directory), "OCTOLYZER_CACHE_DIR": str(cache_directory)},
+                clear=True,
+            ), patch("gui.environment._conda_environments", return_value=[]), patch(
+                "gui.environment._managed_environments", return_value=[]
+            ), patch("gui.environment._system_python_environments", return_value=[]), patch(
+                "gui.environment._workspace_environments", return_value=[]
+            ), patch(
+                "gui.environment.shutil.which",
+                side_effect=lambda command: str(real_binary) if command in ("python", "python3") else None,
+            ):
+                discovered = discover_environments(workspace_root=temporary_directory)
+
+            matching = [candidate for candidate in discovered if candidate.executable == real_binary.resolve()]
+            self.assertEqual(len(matching), 1, "the PATH python and the venv must collapse into one entry")
             self.assertEqual(matching[0].label, "OCTolyzer (auto-installed)")
             self.assertEqual(matching[0].source, "bootstrap")
 

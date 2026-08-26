@@ -144,6 +144,18 @@ def _create_linux_appimage(executable: Path, output_directory: Path) -> Path:
         application_directory.mkdir(parents=True)
         shutil.copy2(executable, application_directory / LAUNCHER_NAME)
         (application_directory / LAUNCHER_NAME).chmod(0o755)
+        # The AppImage runtime execv()s $APPDIR/AppRun on launch -- without
+        # this file present, running the AppImage fails immediately with
+        # "execv error: No such file or directory". appimagetool does not
+        # create or require one at build time, so it has to be written here.
+        app_run = app_dir / "AppRun"
+        app_run.write_text(
+            "#!/bin/sh\n"
+            'HERE="$(dirname "$(readlink -f "${0}")")"\n'
+            f'exec "${{HERE}}/usr/bin/{LAUNCHER_NAME}" "$@"\n',
+            encoding="utf-8",
+        )
+        app_run.chmod(0o755)
         (app_dir / "OCTolyzer.desktop").write_text(
             "[Desktop Entry]\nName=OCTolyzer\nExec=OCTolyzerGUI\nIcon=OCTolyzer\n"
             "Type=Application\nCategories=Science;\n",

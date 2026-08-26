@@ -330,8 +330,16 @@ def run_streaming(
 
 
 def assemble_candidate(venv_python: str | os.PathLike[str]) -> EnvironmentCandidate:
-    """Wrap the freshly-created venv as a candidate for the normal discovery/probe flow."""
-    return EnvironmentCandidate(Path(venv_python), "OCTolyzer (auto-installed)", "uv")
+    """Wrap the freshly-created venv as a candidate for the normal discovery/probe flow.
+
+    Label and source ("bootstrap") must match what
+    gui.environment._bootstrapped_environment() produces for the same path --
+    that's the durable discovery source for this venv (found again on every
+    future refresh/restart); this is only the immediate, same-session
+    shortcut so the UI doesn't have to wait on a full re-discovery pass right
+    after setup finishes.
+    """
+    return EnvironmentCandidate(Path(venv_python), "OCTolyzer (auto-installed)", "bootstrap")
 
 
 def run_bootstrap(

@@ -151,10 +151,26 @@ def discover_environments(
     candidates.extend(_conda_environments())
     candidates.extend(_managed_environments())
     candidates.extend(_system_python_environments())
+    candidates.extend(_bootstrapped_environment())
 
     unique = _deduplicate_candidates(candidates)
     save_discovery_cache(unique)
     return unique
+
+
+def _bootstrapped_environment() -> list[EnvironmentCandidate]:
+    """Find the venv created by the automatic setup flow (gui/bootstrap.py).
+
+    This has to be a real, persistent discovery source -- not just the
+    in-memory candidate gui/app.py splices in right after bootstrap
+    finishes -- so the environment survives an app restart or a manual
+    refresh instead of silently vanishing on the next discovery scan.
+    """
+    runtime_env = _cache_directory() / "runtime-env"
+    executable = _environment_python(runtime_env)
+    if executable is None:
+        return []
+    return [EnvironmentCandidate(executable, "OCTolyzer (auto-installed)", "bootstrap")]
 
 
 def load_cached_environments() -> list[EnvironmentCandidate]:

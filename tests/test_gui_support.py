@@ -6,8 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from gui.environment import (EnvironmentCandidate, EnvironmentProbe,
-                             _common_python_paths, _conda_environments,
-                             _deduplicate_candidates, clear_cached_probe,
+                             _bootstrapped_environment, _common_python_paths,
+                             _conda_environments, _deduplicate_candidates,
+                             clear_cached_probe, discover_environments,
                              load_cached_environments, load_cached_probe,
                              save_discovery_cache, save_probe_cache)
 from gui.runner import build_command, build_environment
@@ -112,6 +113,46 @@ class GuiSupportTests(unittest.TestCase):
                 executable.write_bytes(b"changed")
                 self.assertEqual(load_cached_environments(), [])
                 self.assertIsNone(load_cached_probe(executable, runtime_root=temporary_directory))
+
+    def test_bootstrapped_environment_is_discovered_by_path_not_just_in_memory(self):
+        # Regression test: gui/app.py's BootstrapWorker splices the new
+        # candidate into the in-memory list for instant feedback, but that
+        # alone doesn't survive a refresh or app restart. Without this
+        # discovery source, a later discover_environments() call drops it
+        # (only "manual"-sourced candidates survive _replace_candidates) and
+        # can surface an unrelated, unpopulated interpreter instead -- e.g.
+        # the bare CPython uv itself downloaded under
+        # ~/.local/share/uv/python/, which also happens to get a "uv: ..."
+        # label and looks confusingly similar in the environment picker.
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            cache_directory = Path(temporary_directory) / "cache"
+            runtime_env = cache_directory / "runtime-env"
+            (runtime_env / "bin").mkdir(parents=True)
+            python_executable = runtime_env / "bin" / "python"
+            python_executable.touch()
+
+            with patch.dict(os.environ, {"OCTOLYZER_CACHE_DIR": str(cache_directory)}):
+                found = _bootstrapped_environment()
+                self.assertEqual(len(found), 1)
+                self.assertEqual(found[0].executable, python_executable)
+                self.assertEqual(found[0].source, "bootstrap")
+
+                with patch("gui.environment._conda_environments", return_value=[]), patch(
+                    "gui.environment._managed_environments", return_value=[]
+                ), patch("gui.environment._system_python_environments", return_value=[]), patch(
+                    "gui.environment._workspace_environments", return_value=[]
+                ):
+                    discovered = discover_environments(workspace_root=temporary_directory)
+                # .resolve() to tolerate /tmp <-> /private/tmp symlinking on macOS.
+                self.assertIn(
+                    python_executable.resolve(),
+                    [candidate.executable.resolve() for candidate in discovered],
+                )
+
+    def test_no_bootstrapped_environment_when_runtime_env_missing(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"OCTOLYZER_CACHE_DIR": temporary_directory}):
+                self.assertEqual(_bootstrapped_environment(), [])
 
 
 if __name__ == "__main__":

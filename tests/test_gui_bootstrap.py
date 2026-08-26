@@ -246,11 +246,17 @@ class RunStreamingTests(unittest.TestCase):
 
 
 class AssembleCandidateTests(unittest.TestCase):
-    def test_builds_uv_sourced_candidate(self):
+    def test_builds_bootstrap_sourced_candidate(self):
         candidate = assemble_candidate("/tmp/env/bin/python")
         self.assertIsInstance(candidate, EnvironmentCandidate)
         self.assertEqual(candidate.executable, Path("/tmp/env/bin/python"))
-        self.assertEqual(candidate.source, "uv")
+        # Must match gui.environment._bootstrapped_environment()'s source
+        # string exactly -- that's the durable discovery path for this same
+        # venv on the next refresh/restart, and a mismatch here is exactly
+        # what let the bare "uv: <interpreter>" discovery entry silently
+        # replace this candidate after a refresh (see the regression test
+        # in tests/test_gui_support.py).
+        self.assertEqual(candidate.source, "bootstrap")
 
 
 class RunBootstrapOrchestrationTests(unittest.TestCase):
@@ -277,7 +283,7 @@ class RunBootstrapOrchestrationTests(unittest.TestCase):
                 BootstrapStage.DONE,
             ],
         )
-        self.assertEqual(candidate.source, "uv")
+        self.assertEqual(candidate.source, "bootstrap")
         self.assertEqual(mock_run_streaming.call_count, 4)  # python install, venv, torch, requirements
 
     def test_downloads_uv_when_not_found_locally(self):

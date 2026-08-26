@@ -80,8 +80,11 @@ Where things are cached (override the whole root with OCTOLYZER_CACHE_DIR):
 
 - The downloaded `uv` binary: `<cache dir>/bootstrap/uv/` (`%LOCALAPPDATA%\OCTolyzer` on Windows, `~/.cache/octolyzer` elsewhere).
 - The created environment: `<cache dir>/runtime-env/`.
+- The managed Python `uv` installs the venv from: `~/.local/share/uv/python/` (POSIX) or the platform-appropriate uv data dir on Windows -- NOT under `<cache dir>`, and NOT safe to delete.
 
-To force a clean re-bootstrap, delete `runtime-env` (and `bootstrap/uv` if you also want to re-verify/re-download `uv` itself) and click "Set up environment automatically" again.
+To force a clean re-bootstrap, delete `runtime-env` only, then click "Set up environment automatically" again.
+
+IMPORTANT: do not delete the managed Python under `~/.local/share/uv/python/` while keeping `runtime-env` around. Like virtually all Python virtual environments, `runtime-env/bin/python` is a symlink back to the interpreter that created it, not a self-contained copy -- deleting that interpreter silently breaks the venv. It won't be obvious immediately (nothing re-checks the disk until the next discovery scan), but the next refresh or app restart will find a dangling symlink and drop the environment from the list entirely, which looks exactly like it "disappeared." If you want to reclaim disk space, delete `runtime-env` itself (which does own its installed packages) rather than the shared managed Python underneath it.
 
 The GUI does not select CUDA vs. CPU-only torch, or detect a GPU -- `torch`/`torchvision` are installed from the default PyPI index, which on Windows/Linux includes CUDA support and runs CPU-only when no compatible GPU is present (the same runtime device-selection the GUI already probes via torch.cuda.is_available()/torch.backends.mps). Anyone wanting a specific CUDA build, an offline setup, or full control over the environment should use the manual conda instructions in the main README instead of the automatic setup.
 

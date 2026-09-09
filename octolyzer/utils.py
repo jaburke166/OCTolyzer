@@ -6,6 +6,8 @@ import torch
 import shutil
 from skimage import measure, segmentation, morphology, exposure
 from sklearn.linear_model import LinearRegression
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import SimpleITK as sitk

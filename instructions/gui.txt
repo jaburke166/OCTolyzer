@@ -44,6 +44,7 @@ Workflow
 5. Set the analysis options in the grouped configuration sections. Select custom maps to open the searchable retinal layer-pair dialog.
 6. Select Run analysis. The action becomes available only when the environment and configuration are ready.
 7. Review the live log, using Clear, Copy, or Export when needed, and open the selected output folder after completion.
+8. Select Review segmentations to check the segmentations in your web browser. The button is available once the output folder contains review.html, which is written when "Save interactive review files" is switched on. In the browser, choose the same output folder; verdicts are saved there as qc_review.csv (automatically in Chrome and Edge).
 
 The GUI creates a temporary configuration for each run. The selected configuration is copied by OCTolyzer into the output folder as configuration_used.txt. The repository config.txt is changed only when the user explicitly saves a configuration there.
 

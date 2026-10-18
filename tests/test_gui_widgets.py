@@ -8,7 +8,7 @@ try:
     from PySide6.QtGui import QMouseEvent
     from PySide6.QtWidgets import QApplication, QCheckBox
 
-    from gui.app import MainWindow, UiState
+    from gui.app import REVIEW_HUB_FILENAME, MainWindow, UiState
     from gui.config_editor import (ConfigEditor, ModernComboBox, ModernSpinBox,
                                    ToggleSwitch)
     from gui.environment import EnvironmentProbe
@@ -149,6 +149,29 @@ class GuiWidgetTests(unittest.TestCase):
         window._update_ready_state(probe_message="Compatible")
         self.assertEqual(window.ui_state, UiState.SELECTED)
         self.assertFalse(window.run_button.isEnabled())
+        window.close()
+        self.application.processEvents()
+
+    def test_review_button_is_enabled_once_review_files_exist(self):
+        window = MainWindow(Path.cwd())
+        loop = QEventLoop()
+        if window.discovery_thread is not None:
+            window.discovery_thread.finished.connect(loop.quit)
+            loop.exec()
+        self.application.processEvents()
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            window.config_editor.widgets["output_directory"].line_edit.setText(temporary_directory)
+            window._update_action_state()
+            self.assertFalse(window.review_button.isEnabled())
+
+            hub = Path(temporary_directory) / REVIEW_HUB_FILENAME
+            hub.write_text("<!doctype html>", encoding="utf-8")
+            window._update_action_state()
+            self.assertTrue(window.review_button.isEnabled())
+            with patch("gui.app.QDesktopServices.openUrl") as open_url:
+                window.open_review()
+            self.assertEqual(Path(open_url.call_args[0][0].toLocalFile()), hub)
         window.close()
         self.application.processEvents()
 

@@ -46,7 +46,7 @@ SEG_MAPPING = {
 }
 
 
-def load_volfile(vol_path, preprocess=False, custom_maps=[], logging=[], verbose=True):
+def load_volfile(vol_path, preprocess=False, custom_maps=[], logging=[], verbose=True, return_acquisition=False):
     """
     Loads and formats OCT+SLO data from a .vol file, extracting pixel data, metadata, and retinal layers.
 
@@ -67,6 +67,11 @@ def load_volfile(vol_path, preprocess=False, custom_maps=[], logging=[], verbose
         
     verbose : bool, default=True
         If True, prints logging messages to the console.
+
+    return_acquisition : bool, default=False
+        If True, additionally returns a dictionary with the B-scan acquisition endpoints on the
+        SLO in pixel coordinates (`points_px`, shape (N_scans, 2, 2)) and the per-B-scan quality
+        index (`quality`). Used to build the interactive review files.
 
     Returns:
     --------
@@ -442,6 +447,11 @@ def load_volfile(vol_path, preprocess=False, custom_maps=[], logging=[], verbose
 
     # collect SLO output
     slo_output = (slo, slo_acq_fixed, slo_acq, (pad_x,pad_y))
+
+    # Optionally return the raw acquisition geometry and per-B-scan quality
+    if return_acquisition:
+        acquisition = {"points_px": all_px_points, "quality": all_quality}
+        return bscan_data, metadata, slo_output, layer_pairwise, logging, acquisition
         
     return bscan_data, metadata, slo_output, layer_pairwise, logging
 

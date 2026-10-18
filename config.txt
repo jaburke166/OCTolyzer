@@ -18,6 +18,11 @@ robust_run: 1
 save_individual_segmentations: 1
 save_individual_images: 1
 
+# Option to save an interactive review file (.html) per scan in <output_directory>/review, where
+# every segmentation is a layer that can be toggled on/off to check its quality in a web browser.
+# Open <output_directory>/review.html to go through all scans and record a verdict for each.
+save_review_html: 1
+
 # This is to flag that you want to brighten the retinal and choroidal structures of an OCT B-scan
 # and compensate for superficial retinal vessel shadowing
 preprocess_bscans: 1

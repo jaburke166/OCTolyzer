@@ -329,6 +329,11 @@ QStatusBar {
 """
 
 
+# Written to the output folder by octolyzer.review; named here so the launcher
+# does not need the processing dependencies.
+REVIEW_HUB_FILENAME = "review.html"
+
+
 class UiState(str, Enum):
     DISCOVERING = "discovering"
     NO_ENVIRONMENT = "no_environment"
@@ -529,8 +534,11 @@ class MainWindow(QMainWindow):
         self.stop_button = QPushButton("Stop")
         self.stop_button.setObjectName("dangerButton")
         self.open_output_button = QPushButton("Open output folder")
+        self.review_button = QPushButton("Review segmentations")
+        self.review_button.setToolTip("Open the interactive segmentation review in your web browser.")
         self.stop_button.setEnabled(False)
         self.open_output_button.setEnabled(False)
+        self.review_button.setEnabled(False)
         action_bar = QFrame()
         action_bar.setObjectName("actionBar")
         action_layout = QHBoxLayout(action_bar)
@@ -539,6 +547,7 @@ class MainWindow(QMainWindow):
         self.activity_label.setObjectName("mutedLabel")
         self.activity_label.setWordWrap(True)
         action_layout.addWidget(self.activity_label, stretch=1)
+        action_layout.addWidget(self.review_button)
         action_layout.addWidget(self.open_output_button)
         action_layout.addWidget(self.stop_button)
         action_layout.addWidget(self.run_button)
@@ -576,6 +585,7 @@ class MainWindow(QMainWindow):
         self.run_button.clicked.connect(self.run_analysis)
         self.stop_button.clicked.connect(self.stop_analysis)
         self.open_output_button.clicked.connect(self.open_output_folder)
+        self.review_button.clicked.connect(self.open_review)
         self.clear_log_button.clicked.connect(self.log_view.clear)
         self.copy_log_button.clicked.connect(self.log_view.copy)
         self.export_log_button.clicked.connect(self.export_log)
@@ -594,6 +604,7 @@ class MainWindow(QMainWindow):
             (self.run_button, "Run OCTolyzer analysis"),
             (self.stop_button, "Stop OCTolyzer analysis"),
             (self.open_output_button, "Open the output folder"),
+            (self.review_button, "Review segmentations in a web browser"),
             (self.clear_log_button, "Clear the processing log"),
             (self.copy_log_button, "Copy the processing log"),
             (self.export_log_button, "Export the processing log"),
@@ -673,6 +684,7 @@ class MainWindow(QMainWindow):
         )
         self.stop_button.setEnabled(self.ui_state in {UiState.RUNNING, UiState.STOPPING})
         self.open_output_button.setEnabled(self._output_directory_available and not running)
+        self.review_button.setEnabled(self._review_hub_path() is not None and not running)
 
     def export_log(self) -> None:
         destination, _ = QFileDialog.getSaveFileName(
@@ -1030,6 +1042,21 @@ class MainWindow(QMainWindow):
         if output_directory:
             QDesktopServices.openUrl(QUrl.fromLocalFile(output_directory))
             self.statusBar().showMessage(f"Opened {output_directory}", 3000)
+
+    def _review_hub_path(self) -> Path | None:
+        output_directory = str(self.config_editor.values().get("output_directory", "")).strip()
+        if not output_directory:
+            return None
+        hub = Path(output_directory).expanduser() / REVIEW_HUB_FILENAME
+        return hub if hub.is_file() else None
+
+    def open_review(self) -> None:
+        hub = self._review_hub_path()
+        if hub is None:
+            self.statusBar().showMessage("No review files found in the output folder", 4000)
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(hub)))
+        self.statusBar().showMessage(f"Opened {hub} in the web browser", 3000)
 
     def _show_config_error(self, error: ConfigError) -> None:
         QMessageBox.warning(self, "Invalid configuration", str(error))

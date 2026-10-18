@@ -32,7 +32,11 @@ BINARY_KEYS = (
     "analyse_slo",
     "analyse_all_maps",
     "analyse_square_grid",
+    "save_review_html",
 )
+# Keys added after the first release; configuration files written before then
+# stay valid and take these values.
+OPTIONAL_DEFAULTS = {"save_review_html": "1"}
 DIRECTORY_KEYS = ("analysis_directory", "output_directory")
 CONFIG_KEYS = DIRECTORY_KEYS + BINARY_KEYS + (
     "custom_maps",
@@ -57,6 +61,7 @@ CONFIG_FIELDS = (
     ConfigField("robust_run", "Continue if a file fails", "Skip a failed file and continue with the rest of the batch.", "boolean"),
     ConfigField("save_individual_segmentations", "Save segmentation images", "Save segmentation masks and overview images for each file.", "boolean"),
     ConfigField("save_individual_images", "Save individual images", "Save representative OCT and SLO images for each file.", "boolean"),
+    ConfigField("save_review_html", "Save interactive review files", "Write a self-contained HTML viewer per scan for checking segmentations.", "boolean"),
     ConfigField("preprocess_bscans", "Preprocess B-scans", "Enhance retinal and choroidal structures before analysis.", "boolean"),
     ConfigField("analyse_choroid", "Analyse choroid", "Include choroid measurements in the results.", "boolean"),
     ConfigField("analyse_slo", "Analyse SLO", "Analyse the accompanying scanning laser ophthalmoscopy image.", "boolean"),
@@ -91,6 +96,7 @@ class Config:
     analyse_square_grid: int
     choroid_measure_type: str
     linescan_roi_distance: int
+    save_review_html: int = 1
     warnings: tuple[str, ...] = ()
 
     def to_args(self) -> dict[str, object]:
@@ -109,6 +115,7 @@ class Config:
             "analyse_square_grid": self.analyse_square_grid,
             "choroid_measure_type": self.choroid_measure_type,
             "linescan_roi_distance": self.linescan_roi_distance,
+            "save_review_html": self.save_review_html,
         }
 
     def as_values(self) -> dict[str, str]:
@@ -127,6 +134,7 @@ class Config:
             "analyse_square_grid": str(self.analyse_square_grid),
             "choroid_measure_type": self.choroid_measure_type,
             "linescan_roi_distance": str(self.linescan_roi_distance),
+            "save_review_html": str(self.save_review_html),
         }
         return values
 
@@ -192,6 +200,8 @@ def validate_config(
         raw_values = values.as_values()
     else:
         raw_values = {str(key): value for key, value in values.items()}
+    for key, default in OPTIONAL_DEFAULTS.items():
+        raw_values.setdefault(key, default)
 
     errors: list[str] = []
     unknown_keys = sorted(set(raw_values) - set(CONFIG_KEYS))
@@ -268,6 +278,7 @@ def validate_config(
         analyse_square_grid=binary_values["analyse_square_grid"],
         choroid_measure_type=choroid_measure_type,
         linescan_roi_distance=linescan_roi_distance,
+        save_review_html=binary_values["save_review_html"],
         warnings=tuple(warnings),
     )
 

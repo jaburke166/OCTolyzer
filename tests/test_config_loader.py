@@ -106,6 +106,24 @@ class ConfigLoaderTests(unittest.TestCase):
             self.assertEqual(config.analysis_directory, str(input_directory.resolve()))
             self.assertEqual(config.output_directory, str((root / "demo" / "output").resolve()))
 
+    def test_review_files_default_on_for_older_configuration_files(self):
+        self.assertNotIn("save_review_html", CONFIG_VALUES)
+        config = validate_config(CONFIG_VALUES, check_analysis_directory=False)
+        self.assertEqual(config.save_review_html, 1)
+        self.assertEqual(config_to_args(config)["save_review_html"], 1)
+
+    def test_review_flag_is_validated_and_written(self):
+        config = validate_config({**CONFIG_VALUES, "save_review_html": "0"}, check_analysis_directory=False)
+        self.assertEqual(config.save_review_html, 0)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "saved.txt"
+            write_config(config, destination)
+            self.assertIn("save_review_html: 0", destination.read_text(encoding="utf-8"))
+            self.assertEqual(parse_config(destination)["save_review_html"], "0")
+        with self.assertRaises(ConfigError) as context:
+            validate_config({**CONFIG_VALUES, "save_review_html": "yes"}, check_analysis_directory=False)
+        self.assertIn("save_review_html", str(context.exception))
+
     def test_missing_and_unknown_values_are_reported(self):
         with self.assertRaises(ConfigError) as context:
             validate_config({"unknown": "value"}, check_analysis_directory=False)

@@ -130,27 +130,15 @@ output = analyse.analyse(path, save_path)
 
 ### Desktop GUI
 
-OCTolyzer also includes a lightweight cross-platform desktop launcher for users who do not want to edit configuration files or use a terminal. The GUI discovers installed Python environments, checks that the selected environment has the scientific dependencies, provides controls for every `config.txt` field, and starts batch processing while displaying the live log.
+OCTolyzer includes a cross-platform desktop GUI for users who prefer not to edit configuration files manually. The GUI discovers installed Python environments, checks that the selected environment has the required dependencies, provides controls for every `config.txt` field, and starts batch processing while displaying the live log.
 
-The GUI and scientific processing environments are intentionally separate. Install the GUI dependencies in the environment used to build or run the launcher:
-
-```
-python -m pip install -r requirements-gui.txt
-```
-
-The selected processing environment must contain the packages in `requirements.txt`. The launcher presents a single-page workflow: choose and check an environment, set paths and grouped analysis options, then run while monitoring the live log. Custom posterior-pole maps are selected through a searchable dialog, and invalid input folders are reported inline. From the repository root, launch the development GUI with:
+`requirements.txt` includes `PySide6` for the GUI alongside the scientific processing dependencies. The GUI presents a single-page workflow: choose and check an environment, set paths and grouped analysis options, then run while monitoring the live log. Custom posterior-pole maps are selected through a searchable dialog, and invalid input folders are reported inline. From the repository root, launch the GUI with:
 
 ```
 python -m gui.app
 ```
 
-For a double-clickable distribution, build the launcher on the target operating system with Nuitka:
-
-```
-python -m build.build_gui --clean
-```
-
-The build creates one distributable: `OCTolyzerGUI.exe` on Windows, `OCTolyzerGUI.app` on macOS, and `OCTolyzerGUI.AppImage` on Linux. Linux builds require `appimagetool` on `PATH`. Nuitka builds are platform-specific and require a native C compiler. The OCTolyzer source, figures, and default configuration are embedded in the launcher. See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
+See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
 
 ---
 

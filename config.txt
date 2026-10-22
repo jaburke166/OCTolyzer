@@ -52,4 +52,4 @@ choroid_measure_type: perpendicular
 
 # Distance either side of fovea to measure structures in H-line/V-line/Radial scans in microns, i.e. 500 microns, 3000 microns, etc.
 # Only valid for OCT Linescan data, centred at the fovea (H-line/V-line/Radial)
-linescan_roi_distance: 1500
+linescan_roi_distance: 2000

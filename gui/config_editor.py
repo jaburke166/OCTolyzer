@@ -262,6 +262,7 @@ class ConfigEditor(QWidget):
             "analyse_slo",
             "analyse_all_maps",
             "analyse_square_grid",
+            "save_review_html",
         ):
             self.widgets[key].setChecked(bool(getattr(config, key)))
         self.widgets["choroid_measure_type"].setCurrentText(config.choroid_measure_type)

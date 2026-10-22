@@ -85,6 +85,17 @@ class GuiWidgetTests(unittest.TestCase):
         self.assertEqual(editor.widgets["choroid_measure_type"].currentText(), "perpendicular")
         editor.deleteLater()
 
+    def test_review_files_toggle_follows_configuration(self):
+        editor = ConfigEditor(Path("config.txt"))
+        self.assertTrue(editor.widgets["save_review_html"].isChecked())
+        self.assertEqual(editor.values()["save_review_html"], "1")
+
+        editor.widgets["save_review_html"].setChecked(False)
+        self.assertEqual(editor.values()["save_review_html"], "0")
+        editor.reset()
+        self.assertTrue(editor.widgets["save_review_html"].isChecked())
+        editor.deleteLater()
+
     def test_template_paths_are_empty_by_default(self):
         editor = ConfigEditor(Path("config.txt"))
 

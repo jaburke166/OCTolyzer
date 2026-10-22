@@ -1080,30 +1080,16 @@ class MainWindow(QMainWindow):
 
 
 def find_runtime_root() -> Path:
-    """Locate the source/runtime payload in development and Nuitka builds."""
+    """Locate the OCTolyzer repository root."""
     candidates = []
     configured_root = os.environ.get("OCTOLYZER_RUNTIME")
     if configured_root:
         candidates.append(Path(configured_root).expanduser())
-    compiled = globals().get("__compiled__")
-    containing_directory = getattr(compiled, "containing_dir", None)
-    if containing_directory:
-        containing_path = Path(containing_directory)
-        if getattr(compiled, "macos_bundle_mode", False):
-            # Nuitka reports containing_dir as the .app bundle path itself in
-            # macOS app-bundle mode (it strips two extra levels off the
-            # executable's directory), and the staged runtime payload lives
-            # under Contents/MacOS inside that bundle.
-            candidates.append(containing_path / "Contents" / "MacOS" / "runtime")
-        else:
-            candidates.append(containing_path / "runtime")
-    candidates.append(Path(__file__).resolve().parent / "runtime")
-    candidates.append(Path(sys.argv[0]).resolve().parent / "runtime")
     candidates.append(Path(__file__).resolve().parents[1])
     for candidate in candidates:
         if (candidate / "octolyzer").is_dir() and (candidate / "config.txt").is_file():
             return candidate
-    raise FileNotFoundError("Unable to locate the OCTolyzer runtime payload.")
+    raise FileNotFoundError("Unable to locate the OCTolyzer repository root.")
 
 
 def main() -> int:

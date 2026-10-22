@@ -18,7 +18,7 @@ import numpy as np
 from tqdm import tqdm
 from pathlib import Path, PosixPath, WindowsPath
 
-from octolyzer import analyse, collate_data, config_loader, utils
+from octolyzer import analyse, collate_data, config_loader, review, utils
 from octolyzer.segment.octseg import choroidalyzer_inference, deepgpet_inference
 from octolyzer.segment.sloseg import slo_inference, avo_inference, fov_inference
 from octolyzer.measure.bscan.thickness_maps import grid
@@ -56,6 +56,7 @@ def run(args, config_path=None):
         - `robust_run` (int): 1 to skip files with unexpected errors; 0 to halt and allow debugging.
         - `save_individual_segmentations` (int): Save segmentation masks per individual (1 to save, 0 to skip).
         - `save_individual_images` (int): Save SLO/OCT images for each individual (1 to save, 0 to skip).
+        - `save_review_html` (int, optional): Save an interactive review file per scan (default 1).
         - `preprocess_bscans` (int): Preprocess B-scans to enhance choroid visibility (1 to enable, 0 to disable).
         - `analyse_choroid` (int): Include choroid-related results (1 to include, 0 to exclude).
         - `analyse_slo` (int): Analyze the accompanying SLO image (1 to include, 0 to exclude).
@@ -161,6 +162,10 @@ def run(args, config_path=None):
                 "linescan_roi_distance"]
     param_dict = {key:args[key] for key in param_keys}
 
+    # Interactive review files are built from the saved results of each file
+    save_review = bool(args.get("save_review_html", 1))
+    preprocess_review = bool(args["preprocess_bscans"]) and analyse_choroid
+
     # Instantiate SLO binary/AVOD/Fovea segmentation model
     print(f"\nLoading SLO and OCT models.")
     slosegmenter = slo_inference.SLOSegmenter()
@@ -202,6 +207,7 @@ def run(args, config_path=None):
         # Skip if .vol file is an OCT-A scan
         elif "_ANGIO" in fname:
             print(f"{fname} is an OCT-A scan. Skipping.\n\n")
+            continue
 
         # If unprocessed and valid, apply pipeline
         else:
@@ -285,6 +291,18 @@ def run(args, config_path=None):
                 oct_slo_result_dict[fname_type]['oct'] = oct_analysis_output[3]
                 oct_slo_result_dict[fname_type]['log'] = oct_analysis_output[-1]
 
+        # Build (or refresh) the interactive review file for this scan
+        if save_review:
+            _save_review_file(path, save_directory, oct_slo_result_dict[fname_type], preprocess_review)
+
+    # Copy the review hub next to the collated results
+    if save_review:
+        try:
+            review.write_hub(save_directory)
+            print(f"Review segmentations by opening {os.path.join(save_directory, review.HUB_FILENAME)} in a web browser.")
+        except Exception as e:
+            print(f"Could not write the review hub: {e}")
+
     # Collect all measurements together
     collate_data.collate_results(oct_slo_result_dict, save_directory, param_dict['analyse_choroid'], param_dict['analyse_slo'])
 
@@ -293,6 +311,25 @@ def run(args, config_path=None):
     print(f"Completed analysis in {elapsed:.03f} seconds.")
 
 
+
+
+def _save_review_file(path, save_directory, result, preprocess):
+    """
+    Write the interactive review file for one .vol file. Failures here are reported
+    but never interrupt the analysis.
+    """
+    fname = os.path.splitext(os.path.split(path)[1])[0]
+    review_file = review.review_path(save_directory, fname)
+    results_file = os.path.join(save_directory, fname, f"{fname}_output.xlsx")
+    try:
+        # Analysis failed: leave a placeholder so the scan still appears during review
+        if not os.path.exists(results_file):
+            review.build_failed_stub(path, save_directory, result.get('log', []))
+        # Rebuild when missing, or when the results are newer (e.g. after manual annotations)
+        elif not review_file.exists() or os.path.getmtime(results_file) > review_file.stat().st_mtime:
+            review.build_review(path, save_directory, preprocess=preprocess)
+    except Exception as e:
+        print(f"Could not save the review file for {fname}: {type(e).__name__}: {e}")
 
 
 def main(argv=None):

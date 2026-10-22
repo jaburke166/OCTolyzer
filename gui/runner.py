@@ -134,6 +134,6 @@ else:
 
         def __init__(self, *_args, **_kwargs):
             raise RuntimeError(
-                "The OCTolyzer GUI requires PySide6. Install requirements-gui.txt "
-                "in the GUI/build environment."
+                "The OCTolyzer GUI requires PySide6. Install requirements.txt "
+                "in your Python environment."
             )

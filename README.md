@@ -34,6 +34,7 @@ See below for a visual description of OCTolyzer's analysis pipeline.
             - [Peripapillary B-scan](#peripapillary-b-scan)
         - [SLO](#slo)
     - [Execution Time](#execution-time)
+- [Reviewing segmentations](#reviewing-segmentations)
 - [Fixing segmentation errors](#fixing-segmentation-errors)
 - [Debugging](#debugging)
     - [Interactive debugging](#interactive-debugging)
@@ -69,6 +70,7 @@ See below for a visual description of OCTolyzer's analysis pipeline.
 ├───── analyse_slo.py	# Script for SLO image analysis, adapted from SLOctolyzer.
 ├───── collate_data.py	# Combine individual file results for collating into single, summary file for batch processing.
 ├───── main.py		# Wrapper script to run OCTolyzer from the terminal for batch processing.
+├───── review/		# Builds the interactive HTML files used to review segmentations in a web browser.
 └───── utils.py		# Utility functions for plotting and processing segmentations.
 ```
 
@@ -128,27 +130,15 @@ output = analyse.analyse(path, save_path)
 
 ### Desktop GUI
 
-OCTolyzer also includes a lightweight cross-platform desktop launcher for users who do not want to edit configuration files or use a terminal. The GUI discovers installed Python environments, checks that the selected environment has the scientific dependencies, provides controls for every `config.txt` field, and starts batch processing while displaying the live log.
+OCTolyzer includes a cross-platform desktop GUI for users who prefer not to edit configuration files manually. The GUI discovers installed Python environments, checks that the selected environment has the required dependencies, provides controls for every `config.txt` field, and starts batch processing while displaying the live log.
 
-The GUI and scientific processing environments are intentionally separate. Install the GUI dependencies in the environment used to build or run the launcher:
-
-```
-python -m pip install -r requirements-gui.txt
-```
-
-The selected processing environment must contain the packages in `requirements.txt`. The launcher presents a single-page workflow: choose and check an environment, set paths and grouped analysis options, then run while monitoring the live log. Custom posterior-pole maps are selected through a searchable dialog, and invalid input folders are reported inline. From the repository root, launch the development GUI with:
+`requirements.txt` includes `PySide6` for the GUI alongside the scientific processing dependencies. The GUI presents a single-page workflow: choose and check an environment, set paths and grouped analysis options, then run while monitoring the live log. Custom posterior-pole maps are selected through a searchable dialog, and invalid input folders are reported inline. From the repository root, launch the GUI with:
 
 ```
 python -m gui.app
 ```
 
-For a double-clickable distribution, build the launcher on the target operating system with Nuitka:
-
-```
-python -m build.build_gui --clean
-```
-
-The build creates one distributable: `OCTolyzerGUI.exe` on Windows, `OCTolyzerGUI.app` on macOS, and `OCTolyzerGUI.AppImage` on Linux. Linux builds require `appimagetool` on `PATH`. Nuitka builds are platform-specific and require a native C compiler. The OCTolyzer source, figures, and default configuration are embedded in the launcher. See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
+See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
 
 ---
 
@@ -278,6 +268,34 @@ We have recently updated the SLO feature measurement pipeline which is a signifi
 
 ---
 
+## Reviewing segmentations
+
+Segmentations should be checked by eye before the measurements are used. With `save_review_html` set to `1` in `config.txt` (the default), OCTolyzer writes one self-contained HTML file per `.vol` file into `output_directory/review/`, and a review page, `output_directory/review.html`. Nothing needs to be installed and no internet connection is used: the files open in any current web browser.
+
+Open `review.html` (or select **Review segmentations** in the desktop GUI), choose the output folder, and step through the scans:
+
+- Every segmentation is a separate layer which can be switched on/off and recoloured: each retinal layer boundary, the choroid boundaries and vessels, the fovea, the measured region of interest, and on the SLO the binary vessels, arteries, veins, optic disc, fovea and acquisition location. Hold the spacebar to hide all overlays momentarily.
+- Brightness, contrast, gamma, overlay opacity and line width are adjustable, with zoom (Ctrl + scroll), pan (drag) and an optional 1:1 micron aspect ratio.
+- The scan list (left) and settings panel (right) can be hidden, and either the B-scan or the en-face image expanded to fill the window using the icon in its top-right corner.
+- The layout follows the scan pattern. Volume and radial scans can be scrolled through, with the current B-scan highlighted on the SLO (select a line on the SLO to jump to it). Posterior pole scans additionally show the thickness/CVI maps with the ETDRS grid values. Peripapillary scans show the scan circle and its centre, the optic disc and zones B and C.
+- Hovering over a B-scan shows layer thicknesses at that A-scan and its position on the SLO, alongside the thickness profile, measurements, metadata and processing log.
+- Scans are flagged automatically when something looks suspicious (missing fovea, boundaries which cross, have gaps or jump abruptly, a B-scan whose thickness differs from its neighbours, choroid reaching the image edge, low image quality, pipeline warnings). Flags only prioritise what to look at; they never change a measurement. The list can be sorted with the most flagged scans first.
+- Each scan is graded Pass / Borderline / Fail (keys `P`, `B`, `F`), optionally marking which structure is the problem and adding a note. Press `?` for all keyboard shortcuts.
+
+Verdicts are saved, with the reviewer's initials and a timestamp, to `output_directory/qc_review.csv` (one row per file and reviewer, with a `Filename` column matching `analysis_output.xlsx`). Chrome and Edge save this file automatically as you go; Firefox and Safari cannot write to the folder, so use the download button when finished.
+
+For folders analysed before this feature existed, or after deleting the `review` folder, the files can be built without re-running any model:
+
+```
+python -m octolyzer.review path\to\output_directory
+```
+
+This reads the location of the `.vol` files from `configuration_used.txt` in the output folder; use `--input path\to\vol_files` if they have moved, and `--force` to rebuild files which already exist.
+
+**Note**: Review files contain the scan images and acquisition date, so treat them as you would the rest of the output folder. Choroid vessel and SLO segmentation layers are only available when `save_individual_segmentations` was `1` during analysis.
+
+---
+
 ## Fixing segmentation errors
 
 We do not have any automatic functionality within OCTolyzer to correct any layer segmentation errors. Thus, we rely on the user to identify any visible problems with vessel classification.
@@ -362,6 +380,13 @@ If you wish to use this toolkit please consider citing our work using the follow
 ---
 
 ## Updates
+
+### 07/10/2026
+
+* Interactive review of segmentations in a web browser. Each analysed file gets a self-contained HTML file in `output_directory/review/` where every segmentation is a toggleable layer, and `output_directory/review.html` steps through all scans and records a quality-control verdict per scan in `qc_review.csv`. See [Reviewing segmentations](#reviewing-segmentations).
+  - New option `save_review_html` in `config.txt` (on by default; older configuration files remain valid).
+  - `python -m octolyzer.review <output_directory>` builds the review files for previously analysed folders without re-running the models.
+  - The existing overview images in `oct_segmentations/` and `slo_segmentations/` are unchanged.
 
 ### 27/04/2025
 

@@ -2,6 +2,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 dist/
+.octolyzer_version
+/OCTolyzer.bat
+/OCTolyzer.command
+/OCTolyzer.sh
 
 .venv/
 .vscode/

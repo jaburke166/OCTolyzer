@@ -21,7 +21,9 @@ from gui.environment import (EnvironmentCandidate, EnvironmentProbe,
                              discover_environments, load_cached_environments,
                              load_cached_probe, probe_environment,
                              save_probe_cache)
+from gui.launcher import ensure_os_launcher
 from gui.runner import ProcessRunner
+from gui.updater import check_and_apply_update, restart_current_process
 from octolyzer.config_loader import ConfigError, write_config
 
 APP_STYLE = """
@@ -1093,9 +1095,26 @@ def find_runtime_root() -> Path:
 
 
 def main() -> int:
+    try:
+        runtime_root = find_runtime_root()
+    except FileNotFoundError as error:
+        application = QApplication(sys.argv)
+        QMessageBox.critical(None, "OCTolyzer", str(error))
+        return 1
+
+    try:
+        ensure_os_launcher(runtime_root)
+    except OSError:
+        pass
+
+    if os.environ.get("OCTOLYZER_UPDATED_ONCE") != "1":
+        update_result = check_and_apply_update(runtime_root)
+        if update_result.updated:
+            restart_current_process()
+
     application = QApplication(sys.argv)
     try:
-        window = MainWindow(find_runtime_root())
+        window = MainWindow(runtime_root)
     except (FileNotFoundError, RuntimeError) as error:
         QMessageBox.critical(None, "OCTolyzer", str(error))
         return 1

@@ -1,16 +1,22 @@
 QuickStart instructions for OCTolyzer
 
-1. Install miniconda (https://docs.anaconda.com/miniconda/miniconda-install/)
+Option A: Double-click GUI (Recommended, no terminal required)
+--------------------------------------------------------------
+1. Download or clone this repository (https://github.com/jaburke166/OCTolyzer).
+2. Double-click the launcher for your operating system (in `gui/launchers/` on first run, which automatically places only your OS's launcher in the root folder):
+   - Windows: OCTolyzer.bat
+   - macOS: OCTolyzer.command
+   - Linux: OCTolyzer.sh
+   (On first launch, the script automatically installs uv, creates a local Python environment with the latest Python version, and installs requirements.txt. On every launch, it checks for updates and starts `python -m gui.app`.)
 
-2. Open anaconda prompt and clone this repository via 'git clone https://github.com/jaburke166/OCTolyzer.git' 
+Option B: Manual Python / Conda setup
+-------------------------------------
+1. Install Miniconda (https://docs.anaconda.com/miniconda/miniconda-install/) or Python.
+2. Clone this repository via `git clone https://github.com/jaburke166/OCTolyzer.git`.
+3. Install dependencies:
+   pip install -r requirements.txt
+4. Launch the GUI from the repository root:
+   python -m gui.app
+   (Or run headless batch processing via `python octolyzer/main.py` after editing `config.txt`.)
 
-3.  Install dependencies by executing (line by line)
-    conda create -n oct-analysis python=3.11 -y
-	conda activate oct-analysis
-	pip install -r requirements.txt
-
-4. Specify analysis_directory and output_directory in path\to\OCTolyzer\config.txt
-
-5. In anaconda prompt, navigate to path\to\OCTolyzer and execute
-    	python octolyzer\main.py
 

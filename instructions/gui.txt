@@ -1,32 +1,42 @@
 OCTolyzer GUI
 ==============
 
-The GUI is a desktop interface for OCTolyzer. It discovers Python environments, edits config.txt values, checks the selected environment, and starts batch processing.
+The GUI is the default desktop interface for OCTolyzer. It discovers Python environments, edits config.txt values, checks the selected environment, and starts batch processing.
 
-Setup
------
+Double-click launch (No terminal required)
+------------------------------------------
+
+Double-click the launcher for your operating system (found in `gui/launchers/` on first run, which automatically places only your OS's launcher in the repository root):
+
+- Windows: `OCTolyzer.bat`
+- macOS: `OCTolyzer.command`
+- Linux: `OCTolyzer.sh`
+
+On the first run, the launcher installs `uv`, creates a `.venv` virtual environment using the latest available Python version, and installs `requirements.txt`.
+
+On every launch, OCTolyzer automatically checks GitHub for updates. When a newer commit is available, it updates the local files (via `git` or a GitHub archive download), syncs `requirements.txt`, and launches `python -m gui.app`. Set `OCTOLYZER_NO_AUTO_UPDATE=1` in the environment to skip the automatic update check.
+
+Run manually from a Python environment
+--------------------------------------
 
 Install the OCTolyzer dependencies (which include PySide6 for the GUI) in your Python environment:
 
     python -m pip install -r requirements.txt
 
- The GUI checks that the selected processing environment has the required packages installed before enabling the Run analysis button.
-
-Run from the repository
------------------------
-
 From the repository root, run:
 
     python -m gui.app
+
+(or `python -m octolyzer`).
 
 The application requires PySide6 in the interpreter used to launch the GUI. Analysis is executed in the selected processing environment.
 
 Workflow
 --------
 
-1. Start OCTolyzer GUI (`python -m gui.app`).
+1. Start OCTolyzer GUI (by double-clicking `OCTolyzer.bat` / `OCTolyzer.command` / `OCTolyzer.sh`, or running `python -m gui.app`).
 2. Refresh the environment list and select the environment containing OCTolyzer dependencies.
-3. Select Check environment and wait for the compatibility result. Use Re-check after changing packages.
+3. Select Check environment and wait for the compatibility result.
 4. Choose the folder containing .vol files and the output folder. Invalid or missing folders are marked inline.
 5. Set the analysis options in the grouped configuration sections. Select custom maps to open the searchable retinal layer-pair dialog.
 6. Select Run analysis. The action becomes available only when the environment and configuration are ready.
@@ -40,12 +50,10 @@ Models and network access
 
 OCTolyzer model weights are downloaded by the selected processing environment the first time the models are used. The first run therefore requires network access unless the model weights are already cached. A failed model download is reported in the processing log.
 
-The GUI does not install Conda environments, GPU drivers, or model weights automatically. If no compatible environment is found, install the requirements in a Python 3.11 environment and refresh the list.
-
 Troubleshooting
 ---------------
 
-- If no environment is listed, install Python or Miniconda and refresh.
+- If no environment is listed, run the launcher script (`OCTolyzer.bat`, `OCTolyzer.command`, or `OCTolyzer.sh`) or install Python and refresh.
 - If packages are missing, select an environment with requirements.txt installed.
 - If the input folder contains no .vol files, choose the folder containing the Heidelberg scans.
 - For an analysis failure, keep the processing log and the output folder when reporting the problem.

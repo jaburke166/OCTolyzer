@@ -10,7 +10,10 @@ from gui.environment import (EnvironmentCandidate, EnvironmentProbe,
                              _deduplicate_candidates, clear_cached_probe,
                              load_cached_environments, load_cached_probe,
                              save_discovery_cache, save_probe_cache)
+from gui.launcher import ensure_os_launcher
 from gui.runner import build_command, build_environment
+from gui.updater import (VERSION_FILENAME, check_and_apply_update,
+                         get_local_commit_sha)
 
 
 class GuiSupportTests(unittest.TestCase):
@@ -112,6 +115,80 @@ class GuiSupportTests(unittest.TestCase):
                 executable.write_bytes(b"changed")
                 self.assertEqual(load_cached_environments(), [])
                 self.assertIsNone(load_cached_probe(executable, runtime_root=temporary_directory))
+
+    def test_package_main_launches_gui_by_default_and_cli_when_args_given(self):
+        from octolyzer import __main__ as pkg_main
+
+        with patch("gui.app.main", return_value=0) as gui_main:
+            self.assertEqual(pkg_main.main([]), 0)
+            gui_main.assert_called_once_with()
+
+        fake_main = unittest.mock.MagicMock(main=unittest.mock.MagicMock(return_value=0))
+        with patch.dict("sys.modules", {"octolyzer.main": fake_main}):
+            self.assertEqual(pkg_main.main(["--config", "config.txt"]), 0)
+            fake_main.main.assert_called_once_with(["--config", "config.txt"])
+
+    def test_auto_update_skips_when_already_at_remote_sha(self):
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / VERSION_FILENAME).write_text(f"{sha}\n", encoding="utf-8")
+            with patch("gui.updater.fetch_latest_commit_sha", return_value=sha):
+                result = check_and_apply_update(root)
+            self.assertFalse(result.updated)
+            self.assertEqual(result.local_sha, sha)
+            self.assertEqual(result.remote_sha, sha)
+
+    def test_auto_update_applies_archive_and_preserves_local_state(self):
+        old_sha = "1" * 40
+        new_sha = "2" * 40
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / VERSION_FILENAME).write_text(f"{old_sha}\n", encoding="utf-8")
+            (root / "config.txt").write_text("custom_user_config\n", encoding="utf-8")
+            (root / ".venv").mkdir()
+            (root / ".venv" / "marker.txt").write_text("keep\n", encoding="utf-8")
+
+            def fake_archive_update(target_root, _repo, _branch, **_kwargs):
+                (target_root / "new_file.py").write_text("VALUE = 1\n", encoding="utf-8")
+
+            with patch("gui.updater.fetch_latest_commit_sha", return_value=new_sha), patch(
+                "gui.updater._can_update_with_git", return_value=False
+            ), patch("gui.updater._update_from_archive", side_effect=fake_archive_update), patch(
+                "gui.updater.sync_environment_dependencies"
+            ) as sync_deps:
+                result = check_and_apply_update(root)
+
+            self.assertTrue(result.updated)
+            self.assertEqual(get_local_commit_sha(root), new_sha)
+            self.assertTrue((root / "new_file.py").is_file())
+            self.assertEqual((root / "config.txt").read_text(encoding="utf-8"), "custom_user_config\n")
+            self.assertTrue((root / ".venv" / "marker.txt").is_file())
+            sync_deps.assert_called_once_with(root.resolve())
+
+    def test_auto_update_respects_disable_env_var(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with patch.dict(os.environ, {"OCTOLYZER_NO_AUTO_UPDATE": "1"}):
+                result = check_and_apply_update(temporary_directory)
+            self.assertFalse(result.updated)
+
+    def test_ensure_os_launcher_places_only_matching_os_launcher(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "OCTolyzer.bat").write_text("old", encoding="utf-8")
+            (root / "OCTolyzer.sh").write_text("old", encoding="utf-8")
+
+            mac_launcher = ensure_os_launcher(root, platform_name="darwin")
+            self.assertEqual(mac_launcher.name, "OCTolyzer.command")
+            self.assertTrue(mac_launcher.is_file())
+            self.assertFalse((root / "OCTolyzer.bat").exists())
+            self.assertFalse((root / "OCTolyzer.sh").exists())
+
+            win_launcher = ensure_os_launcher(root, platform_name="win32")
+            self.assertEqual(win_launcher.name, "OCTolyzer.bat")
+            self.assertTrue(win_launcher.is_file())
+            self.assertFalse((root / "OCTolyzer.command").exists())
+            self.assertFalse((root / "OCTolyzer.sh").exists())
 
 
 if __name__ == "__main__":

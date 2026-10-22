@@ -128,17 +128,31 @@ output = analyse.analyse(path, save_path)
 
 **note**: The exemplar posterior pole volume data (`demo/Ppole_1.vol` and `demo/Ppole_2.vol`) capture a smaller region of interest (~4.5mm) on the macula than the feature measurement assumes (ETDRS circular grid with radii 1mm,3mm,6mm / 8x8 posterior pole chess grid of width 7mm), so naturally there will be warnings of missing values in many of the subfields.
 
-### Desktop GUI
+### Desktop GUI (Default)
 
-OCTolyzer includes a cross-platform desktop GUI for users who prefer not to edit configuration files manually. The GUI discovers installed Python environments, checks that the selected environment has the required dependencies, provides controls for every `config.txt` field, and starts batch processing while displaying the live log.
+OCTolyzer includes a cross-platform desktop GUI for users who prefer not to edit configuration files or run terminal commands.
 
-`requirements.txt` includes `PySide6` for the GUI alongside the scientific processing dependencies. The GUI presents a single-page workflow: choose and check an environment, set paths and grouped analysis options, then run while monitoring the live log. Custom posterior-pole maps are selected through a searchable dialog, and invalid input folders are reported inline. From the repository root, launch the GUI with:
+#### Double-click launch (Zero terminal setup)
+
+Double-click the launcher for your operating system (located in `gui/launchers/` on first run, which automatically places only your OS's launcher in the root OCTolyzer folder):
+
+- **Windows:** `OCTolyzer.bat`
+- **macOS:** `OCTolyzer.command`
+- **Linux:** `OCTolyzer.sh`
+
+On first launch, the launcher automatically installs [`uv`](https://docs.astral.sh/uv/), creates a local `.venv` with the latest available Python, and installs `requirements.txt`. On every launch, it automatically checks GitHub for updates, pulls any new OCTolyzer changes and dependencies, and starts `python -m gui.app`.
+
+#### Launch from an existing Python environment
+
+If you already have a Python environment with `requirements.txt` installed, launch the GUI from the repository root with:
 
 ```
 python -m gui.app
 ```
 
-See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
+(or simply `python -m octolyzer`).
+
+The GUI discovers installed Python environments, checks that the selected environment has the required dependencies, provides controls for every `config.txt` field, and starts batch processing while displaying the live log. Custom posterior-pole maps are selected through a searchable dialog, and invalid input folders are reported inline. See [instructions/gui.txt](instructions/gui.txt) for the complete workflow and troubleshooting notes.
 
 ---
 

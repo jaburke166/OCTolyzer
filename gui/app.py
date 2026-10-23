@@ -8,19 +8,35 @@ import tempfile
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import (QObject, QSettings, Qt, QThread, QTimer, QUrl,
-                            Signal)
+from PySide6.QtCore import QObject, QSettings, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QKeySequence
-from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout,
-                               QLabel, QMainWindow, QMessageBox,
-                               QPlainTextEdit, QProgressBar, QPushButton,
-                               QSplitter, QStyle, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QSplitter,
+    QStyle,
+    QVBoxLayout,
+    QWidget,
+)
 
 from gui.config_editor import ConfigEditor, ModernComboBox
-from gui.environment import (EnvironmentCandidate, EnvironmentProbe,
-                             discover_environments, load_cached_environments,
-                             load_cached_probe, probe_environment,
-                             save_probe_cache)
+from gui.environment import (
+    EnvironmentCandidate,
+    EnvironmentProbe,
+    discover_environments,
+    load_cached_environments,
+    load_cached_probe,
+    probe_environment,
+    save_probe_cache,
+)
 from gui.launcher import ensure_os_launcher
 from gui.runner import ProcessRunner
 from gui.updater import check_and_apply_update, restart_current_process

@@ -273,7 +273,17 @@ def sync_environment_dependencies(root: Path, *, python_executable: str | None =
     uv_bin = find_uv_executable()
     if uv_bin is not None:
         subprocess.run(
-            [uv_bin, "pip", "install", "--python", interpreter, "-r", str(requirements_file)],
+            [
+                uv_bin,
+                "pip",
+                "install",
+                "--python",
+                interpreter,
+                "--only-binary",
+                ":all:",
+                "-r",
+                str(requirements_file),
+            ],
             cwd=root,
             check=True,
             timeout=600.0,

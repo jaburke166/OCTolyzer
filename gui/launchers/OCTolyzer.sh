@@ -36,10 +36,36 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 if [ ! -x ".venv/bin/python" ]; then
-    echo "Creating Python environment with the latest Python..."
-    uv venv .venv --python-preference managed
-    echo "Installing OCTolyzer dependencies (this may take a few minutes on first run)..."
-    uv pip install --python .venv/bin/python -r requirements.txt
+    echo "Selecting the latest Python version compatible with all dependencies..."
+    SELECTED_PYTHON=""
+    LOCKFILE="$(mktemp "${TMPDIR:-/tmp}/octolyzer-reqs.XXXXXX")"
+    for PY_VER in 3.16 3.15 3.14 3.13 3.12 3.11; do
+        if uv pip compile requirements.txt \
+            --python-version "$PY_VER" \
+            --only-binary :all: \
+            --quiet \
+            --output-file "$LOCKFILE" >/dev/null 2>&1; then
+            if uv venv .venv --python "$PY_VER" --python-preference managed; then
+                SELECTED_PYTHON="$PY_VER"
+                break
+            fi
+        fi
+    done
+    if [ -z "$SELECTED_PYTHON" ]; then
+        rm -f "$LOCKFILE"
+        echo "Error: Could not find a Python version compatible with all dependencies." >&2
+        read -r -p "Press Enter to close..." _
+        exit 1
+    fi
+    echo "Installing OCTolyzer dependencies for Python $SELECTED_PYTHON (this may take a few minutes on first run)..."
+    if ! uv pip install --python .venv/bin/python --only-binary :all: -r "$LOCKFILE"; then
+        rm -f "$LOCKFILE"
+        rm -rf .venv
+        echo "Error: Failed to install dependencies." >&2
+        read -r -p "Press Enter to close..." _
+        exit 1
+    fi
+    rm -f "$LOCKFILE"
 fi
 
 echo "Checking for OCTolyzer updates..."

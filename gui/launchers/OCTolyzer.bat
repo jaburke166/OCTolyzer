@@ -26,20 +26,36 @@ if %ERRORLEVEL% neq 0 (
 )
 
 if not exist ".venv\Scripts\python.exe" (
-    echo Creating Python environment with the latest Python...
-    uv venv .venv --python-preference managed
-    if %ERRORLEVEL% neq 0 (
-        echo Failed to create virtual environment.
+    echo Selecting the latest Python version compatible with all dependencies...
+    set "SELECTED_PYTHON="
+    set "LOCKFILE=%TEMP%\octolyzer-reqs-%RANDOM%.txt"
+    for %%V in (3.16 3.15 3.14 3.13 3.12 3.11) do (
+        if not defined SELECTED_PYTHON (
+            uv pip compile requirements.txt --python-version %%V --only-binary :all: --quiet --output-file "!LOCKFILE!" >nul 2>nul
+            if !ERRORLEVEL! equ 0 (
+                uv venv .venv --python %%V --python-preference managed
+                if !ERRORLEVEL! equ 0 (
+                    set "SELECTED_PYTHON=%%V"
+                )
+            )
+        )
+    )
+    if not defined SELECTED_PYTHON (
+        if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
+        echo Failed to find a Python version compatible with all dependencies.
         pause
         exit /b 1
     )
-    echo Installing OCTolyzer dependencies ^(this may take a few minutes on first run^)...
-    uv pip install --python ".venv\Scripts\python.exe" -r requirements.txt
-    if %ERRORLEVEL% neq 0 (
+    echo Installing OCTolyzer dependencies for Python !SELECTED_PYTHON! ^(this may take a few minutes on first run^)...
+    uv pip install --python ".venv\Scripts\python.exe" --only-binary :all: -r "!LOCKFILE!"
+    if !ERRORLEVEL! neq 0 (
+        if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
+        rmdir /s /q ".venv" >nul 2>nul
         echo Failed to install dependencies.
         pause
         exit /b 1
     )
+    if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
 )
 
 echo Checking for OCTolyzer updates...

@@ -119,9 +119,10 @@ class GuiSupportTests(unittest.TestCase):
     def test_package_main_launches_gui_by_default_and_cli_when_args_given(self):
         from octolyzer import __main__ as pkg_main
 
-        with patch("gui.app.main", return_value=0) as gui_main:
+        fake_gui_app = unittest.mock.MagicMock(main=unittest.mock.MagicMock(return_value=0))
+        with patch.dict("sys.modules", {"gui.app": fake_gui_app}):
             self.assertEqual(pkg_main.main([]), 0)
-            gui_main.assert_called_once_with()
+            fake_gui_app.main.assert_called_once_with()
 
         fake_main = unittest.mock.MagicMock(main=unittest.mock.MagicMock(return_value=0))
         with patch.dict("sys.modules", {"octolyzer.main": fake_main}):

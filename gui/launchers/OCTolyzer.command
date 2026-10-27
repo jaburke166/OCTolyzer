@@ -75,11 +75,24 @@ main() {
         fi
     fi
 
-    # --- Step 4: Provision .venv with newest compatible Python (if missing) ---
+    # --- Step 4 & 5: Provision or self-heal .venv and sync requirements.txt ---
     BINARY_PKGS="torch,torchvision,numpy,scipy,matplotlib,opencv-python,scikit-image,scikit-learn,SimpleITK,numba,llvmlite,bottleneck,PySide6,pandas,Pillow"
-    LOCKFILE=""
+    NEED_PROVISION=0
 
     if [ ! -x ".venv/bin/python" ]; then
+        NEED_PROVISION=1
+    else
+        echo "Verifying OCTolyzer dependencies..."
+        if ! uv pip install --python .venv/bin/python --only-binary "$BINARY_PKGS" --quiet -r requirements.txt >/dev/null 2>&1; then
+            CURRENT_PY_VER="$(.venv/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "")"
+            if [ -z "$CURRENT_PY_VER" ] || ! uv pip compile requirements.txt --python-version "$CURRENT_PY_VER" --only-binary "$BINARY_PKGS" --quiet >/dev/null 2>&1; then
+                echo "Current Python ($CURRENT_PY_VER) is no longer compatible with updated requirements. Rebuilding environment..."
+                NEED_PROVISION=1
+            fi
+        fi
+    fi
+
+    if [ "$NEED_PROVISION" -eq 1 ]; then
         echo "Selecting the latest Python version compatible with all dependencies..."
         SELECTED_PYTHON=""
         LOCKFILE="$(mktemp "${TMPDIR:-/tmp}/octolyzer-reqs.XXXXXX")"
@@ -89,6 +102,7 @@ main() {
                 --only-binary "$BINARY_PKGS" \
                 --quiet \
                 --output-file "$LOCKFILE" >/dev/null 2>&1; then
+                rm -rf .venv
                 if uv venv .venv --python "$PY_VER" --python-preference managed; then
                     SELECTED_PYTHON="$PY_VER"
                     break
@@ -97,23 +111,24 @@ main() {
         done
         if [ -z "$SELECTED_PYTHON" ]; then
             rm -f "$LOCKFILE"
-            echo "Error: Could not find a Python version compatible with all dependencies." >&2
-            read -r -p "Press Enter to close..." _
-            exit 1
-        fi
-        echo "Installing OCTolyzer dependencies for Python $SELECTED_PYTHON (this may take a few minutes on first run)..."
-        if ! uv pip install --python .venv/bin/python --only-binary "$BINARY_PKGS" -r "$LOCKFILE"; then
+            if [ -x ".venv/bin/python" ]; then
+                echo "Warning: Could not resolve updated requirements (offline?); continuing with existing environment."
+            else
+                echo "Error: Could not find a Python version compatible with all dependencies." >&2
+                read -r -p "Press Enter to close..." _
+                exit 1
+            fi
+        else
+            echo "Installing OCTolyzer dependencies for Python $SELECTED_PYTHON (this may take a few minutes on first run)..."
+            if ! uv pip install --python .venv/bin/python --only-binary "$BINARY_PKGS" -r "$LOCKFILE"; then
+                rm -f "$LOCKFILE"
+                rm -rf .venv
+                echo "Error: Failed to install dependencies." >&2
+                read -r -p "Press Enter to close..." _
+                exit 1
+            fi
             rm -f "$LOCKFILE"
-            rm -rf .venv
-            echo "Error: Failed to install dependencies." >&2
-            read -r -p "Press Enter to close..." _
-            exit 1
         fi
-        rm -f "$LOCKFILE"
-    else
-        # --- Step 5: Sync dependencies into existing .venv ---
-        echo "Verifying OCTolyzer dependencies..."
-        uv pip install --python .venv/bin/python --only-binary "$BINARY_PKGS" --quiet -r requirements.txt || true
     fi
 
     # --- Step 6: Launch GUI ---

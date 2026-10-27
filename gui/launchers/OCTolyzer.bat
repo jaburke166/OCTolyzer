@@ -60,10 +60,33 @@ if not "%OCTOLYZER_LAUNCHER_REEXEC%"=="1" (
     )
 )
 
-REM --- Step 4: Provision .venv with newest compatible Python (if missing) ---
+REM --- Step 4 & 5: Provision or self-heal .venv and sync requirements.txt ---
 set "BINARY_PKGS=torch,torchvision,numpy,scipy,matplotlib,opencv-python,scikit-image,scikit-learn,SimpleITK,numba,llvmlite,bottleneck,PySide6,pandas,Pillow"
+set "NEED_PROVISION=0"
+set "HAD_VENV=0"
 
 if not exist ".venv\Scripts\python.exe" (
+    set "NEED_PROVISION=1"
+) else (
+    set "HAD_VENV=1"
+    echo Verifying OCTolyzer dependencies...
+    uv pip install --python ".venv\Scripts\python.exe" --only-binary "!BINARY_PKGS!" --quiet -r requirements.txt >nul 2>nul
+    if !ERRORLEVEL! neq 0 (
+        set "CURRENT_PY_VER="
+        for /f "delims=" %%P in ('".venv\Scripts\python.exe" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2^>nul') do set "CURRENT_PY_VER=%%P"
+        if not defined CURRENT_PY_VER (
+            set "NEED_PROVISION=1"
+        ) else (
+            uv pip compile requirements.txt --python-version "!CURRENT_PY_VER!" --only-binary "!BINARY_PKGS!" --quiet >nul 2>nul
+            if !ERRORLEVEL! neq 0 (
+                echo Current Python ^(!CURRENT_PY_VER!^) is no longer compatible with updated requirements. Rebuilding environment...
+                set "NEED_PROVISION=1"
+            )
+        )
+    )
+)
+
+if "!NEED_PROVISION!"=="1" (
     echo Selecting the latest Python version compatible with all dependencies...
     set "SELECTED_PYTHON="
     set "LOCKFILE=%TEMP%\octolyzer-reqs-%RANDOM%.txt"
@@ -71,6 +94,7 @@ if not exist ".venv\Scripts\python.exe" (
         if not defined SELECTED_PYTHON (
             uv pip compile requirements.txt --python-version %%V --only-binary "!BINARY_PKGS!" --quiet --output-file "!LOCKFILE!" >nul 2>nul
             if !ERRORLEVEL! equ 0 (
+                if exist ".venv" rmdir /s /q ".venv" >nul 2>nul
                 uv venv .venv --python %%V --python-preference managed
                 if !ERRORLEVEL! equ 0 (
                     set "SELECTED_PYTHON=%%V"
@@ -80,26 +104,29 @@ if not exist ".venv\Scripts\python.exe" (
     )
     if not defined SELECTED_PYTHON (
         if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
-        echo Failed to find a Python version compatible with all dependencies.
-        pause
-        exit /b 1
-    )
-    echo Installing OCTolyzer dependencies for Python !SELECTED_PYTHON! ^(this may take a few minutes on first run^)...
-    uv pip install --python ".venv\Scripts\python.exe" --only-binary "!BINARY_PKGS!" -r "!LOCKFILE!"
-    if !ERRORLEVEL! neq 0 (
+        if exist ".venv\Scripts\python.exe" (
+            echo Warning: Could not resolve updated requirements ^(offline?^); continuing with existing environment.
+        ) else (
+            echo Failed to find a Python version compatible with all dependencies.
+            pause
+            exit /b 1
+        )
+    ) else (
+        echo Installing OCTolyzer dependencies for Python !SELECTED_PYTHON! ^(this may take a few minutes on first run^)...
+        uv pip install --python ".venv\Scripts\python.exe" --only-binary "!BINARY_PKGS!" -r "!LOCKFILE!"
+        if !ERRORLEVEL! neq 0 (
+            if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
+            rmdir /s /q ".venv" >nul 2>nul
+            echo Failed to install dependencies.
+            pause
+            exit /b 1
+        )
         if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
-        rmdir /s /q ".venv" >nul 2>nul
-        echo Failed to install dependencies.
-        pause
-        exit /b 1
+        if "!HAD_VENV!"=="0" (
+            REM Check for code updates now that Python is available (for non-git ZIP installs)
+            ".venv\Scripts\python.exe" -m gui.updater
+        )
     )
-    if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
-    REM Check for code updates now that Python is available (for non-git ZIP installs)
-    ".venv\Scripts\python.exe" -m gui.updater
-) else (
-    REM --- Step 5: Sync dependencies into existing .venv ---
-    echo Verifying OCTolyzer dependencies...
-    uv pip install --python ".venv\Scripts\python.exe" --only-binary "!BINARY_PKGS!" --quiet -r requirements.txt
 )
 
 REM --- Step 6: Launch GUI ---

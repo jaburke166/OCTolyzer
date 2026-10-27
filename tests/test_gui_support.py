@@ -76,6 +76,30 @@ class GuiSupportTests(unittest.TestCase):
             self.assertEqual(len(candidates), 1)
             self.assertEqual(candidates[0].label, "first")
 
+    def test_virtualenv_symlink_is_preserved_not_dereferenced_to_base_python(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory).resolve()
+            base_python = root / "base" / "bin" / "python3.14"
+            base_python.parent.mkdir(parents=True)
+            base_python.touch()
+
+            venv_root = root / ".venv"
+            venv_bin = venv_root / "bin"
+            venv_bin.mkdir(parents=True)
+            (venv_root / "pyvenv.cfg").write_text("home = /opt/homebrew/bin\n", encoding="utf-8")
+            venv_python = venv_bin / "python"
+            venv_python.symlink_to(base_python)
+
+            candidates = _deduplicate_candidates(
+                [
+                    EnvironmentCandidate(venv_python, "Workspace: .venv", "workspace"),
+                    EnvironmentCandidate(base_python, "System Python", "system"),
+                ]
+            )
+            self.assertEqual(len(candidates), 2)
+            self.assertEqual(candidates[0].executable, venv_python)
+            self.assertEqual(candidates[1].executable, base_python)
+
     def test_conda_is_found_from_standard_installation_without_path(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory) / "anaconda3"

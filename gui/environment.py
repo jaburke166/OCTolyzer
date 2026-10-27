@@ -252,7 +252,7 @@ def load_cached_probe(
     runtime_root: str | os.PathLike[str] | None = None,
 ) -> EnvironmentProbe | None:
     """Return a cached probe when the interpreter and its environment are unchanged."""
-    executable_path = _resolved_path(Path(executable).expanduser())
+    executable_path = _environment_identity_path(Path(executable).expanduser())
     payload = _read_cache(PROBE_CACHE_NAME)
     if payload.get("version") != CACHE_VERSION:
         return None
@@ -287,7 +287,7 @@ def save_probe_cache(
     runtime_root: str | os.PathLike[str] | None = None,
 ) -> None:
     """Persist a compatibility result for reuse by the next GUI session."""
-    executable_path = _resolved_path(Path(probe.executable).expanduser())
+    executable_path = _environment_identity_path(Path(probe.executable).expanduser())
     runtime = str(_resolved_path(Path(runtime_root).expanduser())) if runtime_root is not None else ""
     payload = _read_cache(PROBE_CACHE_NAME)
     entries = [item for item in payload.get("probes", []) if isinstance(item, dict)]
@@ -316,7 +316,7 @@ def clear_cached_probe(
     runtime_root: str | os.PathLike[str] | None = None,
 ) -> None:
     """Remove the cached result for one interpreter and runtime payload."""
-    executable_path = _resolved_path(Path(executable).expanduser())
+    executable_path = _environment_identity_path(Path(executable).expanduser())
     runtime = str(_resolved_path(Path(runtime_root).expanduser())) if runtime_root is not None else ""
     payload = _read_cache(PROBE_CACHE_NAME)
     entries = [
@@ -628,16 +628,26 @@ def _deduplicate_candidates(candidates: list[EnvironmentCandidate]) -> list[Envi
     unique: list[EnvironmentCandidate] = []
     seen: set[Path] = set()
     for candidate in candidates:
-        executable = _resolved_path(Path(candidate.executable).expanduser())
-        if executable in seen or not executable.is_file() or _is_ignored_executable(executable):
+        raw_path = Path(candidate.executable).expanduser()
+        key = _environment_identity_path(raw_path)
+        if key in seen or not raw_path.is_file() or _is_ignored_executable(_resolved_path(raw_path)):
             continue
-        seen.add(executable)
-        unique.append(EnvironmentCandidate(executable, candidate.label, candidate.source))
+        seen.add(key)
+        unique.append(EnvironmentCandidate(key, candidate.label, candidate.source))
     return unique
 
 
 def _is_ignored_executable(executable: Path) -> bool:
     return "pkgs" in {part.casefold() for part in executable.parts}
+
+
+def _environment_identity_path(path: Path) -> Path:
+    """Resolve parent directories while preserving a virtualenv's python symlink."""
+    expanded = path.expanduser()
+    parent_prefix = expanded.parent.parent
+    if (parent_prefix / "pyvenv.cfg").is_file():
+        return _resolved_path(expanded.parent) / expanded.name
+    return _resolved_path(expanded)
 
 
 def _resolved_path(path: Path) -> Path:

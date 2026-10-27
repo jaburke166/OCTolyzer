@@ -1032,7 +1032,7 @@ def shadow_compensate(img, gamma=1, win_size=75, plot=False):
     E_i = E_ij.sum(axis=0)
 
     # Centred, moving average according to win_size, pad edges of average with original signal
-    E_i_smooth = pd.Series(E_i).rolling(win_size, center=True).mean().values
+    E_i_smooth = pd.Series(E_i).rolling(win_size, center=True).mean().to_numpy(copy=True)
     E_i_smooth[:win_size//2], E_i_smooth[-win_size//2:] = E_i[:win_size//2], E_i[-win_size//2:]
 
     # Compensation is linear scale made to individual energy levels to match total energy per A-scan

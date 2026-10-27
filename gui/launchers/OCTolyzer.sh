@@ -39,10 +39,11 @@ if [ ! -x ".venv/bin/python" ]; then
     echo "Selecting the latest Python version compatible with all dependencies..."
     SELECTED_PYTHON=""
     LOCKFILE="$(mktemp "${TMPDIR:-/tmp}/octolyzer-reqs.XXXXXX")"
-    for PY_VER in 3.16 3.15 3.14 3.13 3.12 3.11; do
+    BINARY_PKGS="torch,torchvision,numpy,scipy,matplotlib,opencv-python,scikit-image,scikit-learn,SimpleITK,numba,llvmlite,bottleneck,PySide6,pandas,Pillow"
+    for PY_VER in 3.13 3.12 3.11; do
         if uv pip compile requirements.txt \
             --python-version "$PY_VER" \
-            --only-binary :all: \
+            --only-binary "$BINARY_PKGS" \
             --quiet \
             --output-file "$LOCKFILE" >/dev/null 2>&1; then
             if uv venv .venv --python "$PY_VER" --python-preference managed; then
@@ -58,7 +59,7 @@ if [ ! -x ".venv/bin/python" ]; then
         exit 1
     fi
     echo "Installing OCTolyzer dependencies for Python $SELECTED_PYTHON (this may take a few minutes on first run)..."
-    if ! uv pip install --python .venv/bin/python --only-binary :all: -r "$LOCKFILE"; then
+    if ! uv pip install --python .venv/bin/python --only-binary "$BINARY_PKGS" -r "$LOCKFILE"; then
         rm -f "$LOCKFILE"
         rm -rf .venv
         echo "Error: Failed to install dependencies." >&2

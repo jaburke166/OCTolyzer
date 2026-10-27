@@ -127,9 +127,9 @@ class Choroidalyzer:
             self.device = "cpu"
         if local_model_path is not None:
             if base:
-                self.model = torch.load(local_model_path[0], map_location=self.device)
+                self.model = torch.load(local_model_path[0], map_location=self.device, weights_only=False)
         else:
-            self.model = torch.hub.load_state_dict_from_url(model_path, map_location=self.device)
+            self.model = torch.hub.load_state_dict_from_url(model_path, map_location=self.device, weights_only=False)
         if self.device != "cpu":
             print("Macular choroid segmentation model has been loaded with GPU acceleration!")
         self.model.eval()

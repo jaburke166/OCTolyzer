@@ -11,9 +11,9 @@ openpyxl
 scikit-image
 scikit-learn
 seaborn
-segmentation-models-pytorch
+segmentation-models-pytorch==0.3.3
 SimpleITK
-timm
+timm==0.9.2
 tqdm
 bottleneck
 numba

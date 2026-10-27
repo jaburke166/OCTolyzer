@@ -1063,7 +1063,7 @@ def plot_peripapillary_grid(slo, slo_acq, metadata, grid_values, fovea_at_slo,
     # Plot the thickness profile as a subplot underneath the peripapillary grid
     ax.plot(raw_thicknesses[:,0], raw_thicknesses[:,1], linewidth=1, linestyle="--", color="b")
     ax.plot(ma_thicknesses[:,0], ma_thicknesses[:,1], linewidth=3, linestyle="-", color="g")
-    ax.set_ylabel("thickness ($\mu$m)", fontsize=18)
+    ax.set_ylabel(r"thickness ($\mu$m)", fontsize=18)
     ax.tick_params(labelsize=16)
     ax.set_xlim([-180,180])
     
@@ -1138,7 +1138,7 @@ def plot_thickness_profile(raw_thicknesses, ma_thicknesses,
     # Plot the thickness profile as a subplot underneath the peripapillary grid
     ax.plot(raw_thicknesses[:,0], raw_thicknesses[:,1], linewidth=1, linestyle="--", color="b")
     ax.plot(ma_thicknesses[:,0], ma_thicknesses[:,1], linewidth=3, linestyle="-", color="g")
-    ax.set_ylabel("thickness ($\mu$m)", fontsize=18)
+    ax.set_ylabel(r"thickness ($\mu$m)", fontsize=18)
     ax.tick_params(labelsize=16)
     ax.set_xlim([-180,180])
     

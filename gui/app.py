@@ -839,10 +839,14 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _candidate_key(executable: str | os.PathLike[str]) -> Path:
+        path = Path(executable).expanduser()
+        parent_prefix = path.parent.parent
         try:
-            return Path(executable).expanduser().resolve(strict=False)
+            if (parent_prefix / "pyvenv.cfg").is_file():
+                return path.parent.resolve(strict=False) / path.name
+            return path.resolve(strict=False)
         except OSError:
-            return Path(executable).expanduser()
+            return path
 
     def browse_environment(self) -> None:
         executable, _ = QFileDialog.getOpenFileName(

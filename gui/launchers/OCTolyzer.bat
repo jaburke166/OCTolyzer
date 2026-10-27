@@ -29,9 +29,10 @@ if not exist ".venv\Scripts\python.exe" (
     echo Selecting the latest Python version compatible with all dependencies...
     set "SELECTED_PYTHON="
     set "LOCKFILE=%TEMP%\octolyzer-reqs-%RANDOM%.txt"
-    for %%V in (3.16 3.15 3.14 3.13 3.12 3.11) do (
+    set "BINARY_PKGS=torch,torchvision,numpy,scipy,matplotlib,opencv-python,scikit-image,scikit-learn,SimpleITK,numba,llvmlite,bottleneck,PySide6,pandas,Pillow"
+    for %%V in (3.13 3.12 3.11) do (
         if not defined SELECTED_PYTHON (
-            uv pip compile requirements.txt --python-version %%V --only-binary :all: --quiet --output-file "!LOCKFILE!" >nul 2>nul
+            uv pip compile requirements.txt --python-version %%V --only-binary "!BINARY_PKGS!" --quiet --output-file "!LOCKFILE!" >nul 2>nul
             if !ERRORLEVEL! equ 0 (
                 uv venv .venv --python %%V --python-preference managed
                 if !ERRORLEVEL! equ 0 (
@@ -47,7 +48,7 @@ if not exist ".venv\Scripts\python.exe" (
         exit /b 1
     )
     echo Installing OCTolyzer dependencies for Python !SELECTED_PYTHON! ^(this may take a few minutes on first run^)...
-    uv pip install --python ".venv\Scripts\python.exe" --only-binary :all: -r "!LOCKFILE!"
+    uv pip install --python ".venv\Scripts\python.exe" --only-binary "!BINARY_PKGS!" -r "!LOCKFILE!"
     if !ERRORLEVEL! neq 0 (
         if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
         rmdir /s /q ".venv" >nul 2>nul

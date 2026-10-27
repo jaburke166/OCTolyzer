@@ -272,6 +272,11 @@ def sync_environment_dependencies(root: Path, *, python_executable: str | None =
     interpreter = python_executable or sys.executable
     uv_bin = find_uv_executable()
     if uv_bin is not None:
+        binary_pkgs = (
+            "torch,torchvision,numpy,scipy,matplotlib,opencv-python,"
+            "scikit-image,scikit-learn,SimpleITK,numba,llvmlite,"
+            "bottleneck,PySide6,pandas,Pillow"
+        )
         subprocess.run(
             [
                 uv_bin,
@@ -280,7 +285,7 @@ def sync_environment_dependencies(root: Path, *, python_executable: str | None =
                 "--python",
                 interpreter,
                 "--only-binary",
-                ":all:",
+                binary_pkgs,
                 "-r",
                 str(requirements_file),
             ],

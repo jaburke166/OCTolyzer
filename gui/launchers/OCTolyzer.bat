@@ -2,9 +2,14 @@
 setlocal EnableDelayedExpansion
 
 REM Double-clickable Windows launcher for OCTolyzer.
-REM Automatically installs uv, provisions a virtual environment with the latest
-REM Python, updates OCTolyzer and its dependencies, and starts `python -m gui.app`.
+REM Step 1: Resolve repository root and place OS-specific launcher in root
+REM Step 2: Ensure uv is installed
+REM Step 3: Check and pull OCTolyzer code updates from GitHub
+REM Step 4: Provision .venv with the newest compatible Python (if missing)
+REM Step 5: Sync requirements.txt into .venv
+REM Step 6: Launch `python -m gui.app`
 
+REM --- Step 1: Locate repository root & place OS launcher ---
 set "SCRIPT_DIR=%~dp0"
 if exist "%SCRIPT_DIR%..\..\octolyzer" (
     cd /d "%SCRIPT_DIR%..\.."
@@ -13,9 +18,14 @@ if exist "%SCRIPT_DIR%..\..\octolyzer" (
 )
 
 if not exist "OCTolyzer.bat" (
-    copy /Y "%~f0" "OCTolyzer.bat" >nul 2>nul
+    if exist "gui\launchers\OCTolyzer.bat" (
+        copy /Y "gui\launchers\OCTolyzer.bat" "OCTolyzer.bat" >nul 2>nul
+    )
 )
+if exist "OCTolyzer.command" del /f /q "OCTolyzer.command" >nul 2>nul
+if exist "OCTolyzer.sh" del /f /q "OCTolyzer.sh" >nul 2>nul
 
+REM --- Step 2: Ensure uv is installed ---
 set "PATH=%USERPROFILE%\.local\bin;%USERPROFILE%\.cargo\bin;%LOCALAPPDATA%\uv;%PATH%"
 
 where uv >nul 2>nul
@@ -25,11 +35,38 @@ if %ERRORLEVEL% neq 0 (
     set "PATH=%USERPROFILE%\.local\bin;%USERPROFILE%\.cargo\bin;%LOCALAPPDATA%\uv;%PATH%"
 )
 
+REM --- Step 3: Check & pull OCTolyzer code updates first ---
+if not "%OCTOLYZER_LAUNCHER_REEXEC%"=="1" (
+    echo Checking for OCTolyzer updates...
+    if exist ".venv\Scripts\python.exe" (
+        ".venv\Scripts\python.exe" -m gui.updater --code-only
+    ) else (
+        if exist ".git" (
+            where git >nul 2>nul
+            if !ERRORLEVEL! equ 0 (
+                git fetch --quiet origin main >nul 2>nul
+                git merge --ff-only origin/main >nul 2>nul
+            )
+        )
+    )
+
+    REM --- Step 3b: If the launcher template was updated, update root launcher & re-exec ---
+    if exist "gui\launchers\OCTolyzer.bat" (
+        fc /b "gui\launchers\OCTolyzer.bat" "OCTolyzer.bat" >nul 2>nul
+        if !ERRORLEVEL! neq 0 (
+            echo Updating launcher script to latest version...
+            set "OCTOLYZER_LAUNCHER_REEXEC=1" & copy /Y "gui\launchers\OCTolyzer.bat" "OCTolyzer.bat" >nul 2>nul & call "OCTolyzer.bat" %* & exit /b !ERRORLEVEL!
+        )
+    )
+)
+
+REM --- Step 4: Provision .venv with newest compatible Python (if missing) ---
+set "BINARY_PKGS=torch,torchvision,numpy,scipy,matplotlib,opencv-python,scikit-image,scikit-learn,SimpleITK,numba,llvmlite,bottleneck,PySide6,pandas,Pillow"
+
 if not exist ".venv\Scripts\python.exe" (
     echo Selecting the latest Python version compatible with all dependencies...
     set "SELECTED_PYTHON="
     set "LOCKFILE=%TEMP%\octolyzer-reqs-%RANDOM%.txt"
-    set "BINARY_PKGS=torch,torchvision,numpy,scipy,matplotlib,opencv-python,scikit-image,scikit-learn,SimpleITK,numba,llvmlite,bottleneck,PySide6,pandas,Pillow"
     for %%V in (3.13 3.12 3.11) do (
         if not defined SELECTED_PYTHON (
             uv pip compile requirements.txt --python-version %%V --only-binary "!BINARY_PKGS!" --quiet --output-file "!LOCKFILE!" >nul 2>nul
@@ -57,11 +94,15 @@ if not exist ".venv\Scripts\python.exe" (
         exit /b 1
     )
     if exist "!LOCKFILE!" del /f /q "!LOCKFILE!" >nul 2>nul
+    REM Check for code updates now that Python is available (for non-git ZIP installs)
+    ".venv\Scripts\python.exe" -m gui.updater
+) else (
+    REM --- Step 5: Sync dependencies into existing .venv ---
+    echo Verifying OCTolyzer dependencies...
+    uv pip install --python ".venv\Scripts\python.exe" --only-binary "!BINARY_PKGS!" --quiet -r requirements.txt
 )
 
-echo Checking for OCTolyzer updates...
-".venv\Scripts\python.exe" -m gui.updater
-
+REM --- Step 6: Launch GUI ---
 echo Launching OCTolyzer GUI...
 set "OCTOLYZER_UPDATED_ONCE=1"
 if exist ".venv\Scripts\pythonw.exe" (

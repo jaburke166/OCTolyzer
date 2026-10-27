@@ -316,14 +316,22 @@ def restart_current_process() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """CLI hook used by launcher scripts to check/apply updates before opening GUI."""
-    from gui.launcher import ensure_os_launcher
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Update OCTolyzer code and dependencies.")
+    parser.add_argument(
+        "--code-only",
+        action="store_true",
+        help="Update repository files only; let the caller sync dependencies.",
+    )
+    args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[1]
-    result = check_and_apply_update(repo_root, status_callback=print)
-    try:
-        ensure_os_launcher(repo_root)
-    except OSError:
-        pass
+    result = check_and_apply_update(
+        repo_root,
+        sync_dependencies=not args.code_only,
+        status_callback=print,
+    )
     if result.message:
         print(result.message)
     if result.error:

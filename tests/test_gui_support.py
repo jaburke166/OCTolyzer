@@ -7,8 +7,9 @@ from unittest.mock import patch
 
 from gui.environment import (EnvironmentCandidate, EnvironmentProbe,
                              _common_python_paths, _conda_environments,
-                             _deduplicate_candidates, clear_cached_probe,
-                             load_cached_environments, load_cached_probe,
+                             _deduplicate_candidates, _environment_python,
+                             clear_cached_probe, load_cached_environments,
+                             load_cached_probe, probe_environment,
                              save_discovery_cache, save_probe_cache)
 from gui.launcher import ensure_os_launcher
 from gui.runner import build_command, build_environment
@@ -214,6 +215,46 @@ class GuiSupportTests(unittest.TestCase):
             self.assertTrue(win_launcher.is_file())
             self.assertFalse((root / "OCTolyzer.command").exists())
             self.assertFalse((root / "OCTolyzer.sh").exists())
+
+    def test_windows_pythonw_is_normalized_to_python_exe_and_scripts_venv_is_found(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory).resolve()
+            scripts_dir = root / ".venv" / "Scripts"
+            scripts_dir.mkdir(parents=True)
+            (root / ".venv" / "pyvenv.cfg").write_text("home = C:\\Python313\n", encoding="utf-8")
+            python_exe = scripts_dir / "python.exe"
+            pythonw_exe = scripts_dir / "pythonw.exe"
+            python_exe.touch()
+            pythonw_exe.touch()
+
+            with patch("gui.environment.os.name", "nt"):
+                self.assertEqual(_environment_python(root / ".venv"), python_exe)
+
+            candidates = _deduplicate_candidates(
+                [
+                    EnvironmentCandidate(python_exe, "Workspace: .venv", "workspace"),
+                    EnvironmentCandidate(pythonw_exe, "Current Python", "current"),
+                ]
+            )
+            self.assertEqual(len(candidates), 1)
+            self.assertEqual(candidates[0].executable, python_exe)
+            self.assertEqual(candidates[0].label, "Workspace: .venv")
+
+            command = build_command(pythonw_exe, root / "config.txt")
+            self.assertEqual(Path(command[0]), python_exe)
+
+    def test_probe_timeout_returns_concise_message_without_dumping_script(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            executable = Path(temporary_directory) / "python"
+            executable.touch()
+            timeout_exc = unittest.mock.MagicMock(
+                side_effect=__import__("subprocess").TimeoutExpired(cmd=["python", "-c", "HUGE_SCRIPT"], timeout=180)
+            )
+            with patch("gui.environment.subprocess.run", timeout_exc):
+                probe = probe_environment(executable, timeout=180)
+            self.assertFalse(probe.ok)
+            self.assertIn("timed out after 180 seconds", probe.summary)
+            self.assertNotIn("HUGE_SCRIPT", probe.summary)
 
 
 if __name__ == "__main__":

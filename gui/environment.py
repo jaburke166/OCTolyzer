@@ -188,10 +188,10 @@ def probe_environment(
     executable: str | os.PathLike[str],
     *,
     runtime_root: str | os.PathLike[str] | None = None,
-    timeout: float = 45,
+    timeout: float = 180,
 ) -> EnvironmentProbe:
     """Run an isolated compatibility probe using the selected interpreter."""
-    executable_path = Path(executable).expanduser()
+    executable_path = _normalize_console_python(Path(executable).expanduser())
     environment = os.environ.copy()
     if runtime_root is not None:
         runtime_path = str(Path(runtime_root).expanduser())
@@ -203,6 +203,9 @@ def probe_environment(
         )
 
     script = f"MODULES = {REQUIRED_MODULES!r}\n{PROBE_SCRIPT}"
+    run_kwargs: dict[str, Any] = {}
+    if os.name == "nt" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+        run_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     try:
         completed = subprocess.run(
             [str(executable_path), "-u", "-c", script],
@@ -211,8 +214,17 @@ def probe_environment(
             timeout=timeout,
             env=environment,
             check=False,
+            **run_kwargs,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except subprocess.TimeoutExpired:
+        return EnvironmentProbe(
+            executable_path,
+            error=(
+                f"Environment check timed out after {int(timeout)} seconds "
+                "(first-time package initialization may still be running; click Check to retry)."
+            ),
+        )
+    except OSError as error:
         return EnvironmentProbe(executable_path, error=str(error))
 
     if completed.returncode != 0:
@@ -410,10 +422,19 @@ def _conda_executables() -> list[Path]:
 
 def _environment_python(environment: Path) -> Path | None:
     if os.name == "nt":
-        executable = environment / "python.exe"
+        candidates = (
+            environment / "Scripts" / "python.exe",
+            environment / "python.exe",
+        )
     else:
-        executable = environment / "bin" / "python"
-    return executable if executable.is_file() else None
+        candidates = (
+            environment / "bin" / "python",
+            environment / "bin" / "python3",
+        )
+    for executable in candidates:
+        if executable.is_file():
+            return executable
+    return None
 
 
 def _workspace_roots(
@@ -641,12 +662,21 @@ def _is_ignored_executable(executable: Path) -> bool:
     return "pkgs" in {part.casefold() for part in executable.parts}
 
 
+def _normalize_console_python(path: Path) -> Path:
+    """Prefer console python.exe over windowless pythonw.exe on Windows."""
+    if path.name.lower() == "pythonw.exe":
+        console_python = path.with_name("python.exe")
+        if console_python.is_file():
+            return console_python
+    return path
+
+
 def _environment_identity_path(path: Path) -> Path:
     """Resolve parent directories while preserving a virtualenv's python symlink."""
-    expanded = path.expanduser()
-    parent_prefix = expanded.parent.parent
-    if (parent_prefix / "pyvenv.cfg").is_file():
-        return _resolved_path(expanded.parent) / expanded.name
+    expanded = _normalize_console_python(path.expanduser())
+    for parent_prefix in (expanded.parent.parent, expanded.parent):
+        if (parent_prefix / "pyvenv.cfg").is_file():
+            return _resolved_path(expanded.parent) / expanded.name
     return _resolved_path(expanded)
 
 

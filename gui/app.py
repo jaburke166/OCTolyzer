@@ -840,10 +840,14 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _candidate_key(executable: str | os.PathLike[str]) -> Path:
         path = Path(executable).expanduser()
-        parent_prefix = path.parent.parent
+        if path.name.lower() == "pythonw.exe":
+            console_python = path.with_name("python.exe")
+            if console_python.is_file():
+                path = console_python
         try:
-            if (parent_prefix / "pyvenv.cfg").is_file():
-                return path.parent.resolve(strict=False) / path.name
+            for parent_prefix in (path.parent.parent, path.parent):
+                if (parent_prefix / "pyvenv.cfg").is_file():
+                    return path.parent.resolve(strict=False) / path.name
             return path.resolve(strict=False)
         except OSError:
             return path

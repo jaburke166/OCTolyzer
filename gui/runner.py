@@ -19,8 +19,13 @@ def build_command(
     config_path: str | os.PathLike[str],
 ) -> list[str]:
     """Build the platform-neutral OCTolyzer subprocess command."""
+    exe_path = Path(executable).expanduser()
+    if exe_path.name.lower() == "pythonw.exe":
+        console_exe = exe_path.with_name("python.exe")
+        if console_exe.is_file():
+            exe_path = console_exe
     return [
-        str(Path(executable).expanduser()),
+        str(exe_path),
         "-u",
         "-m",
         "octolyzer.main",

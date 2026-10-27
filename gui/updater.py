@@ -269,7 +269,12 @@ def sync_environment_dependencies(root: Path, *, python_executable: str | None =
     if not requirements_file.is_file():
         return
 
-    interpreter = python_executable or sys.executable
+    exe_path = Path(python_executable or sys.executable).expanduser()
+    if exe_path.name.lower() == "pythonw.exe":
+        console_exe = exe_path.with_name("python.exe")
+        if console_exe.is_file():
+            exe_path = console_exe
+    interpreter = str(exe_path)
     uv_bin = find_uv_executable()
     if uv_bin is not None:
         binary_pkgs = (

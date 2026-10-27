@@ -413,7 +413,8 @@ class MainWindow(QMainWindow):
         self.run_directory: tempfile.TemporaryDirectory[str] | None = None
         configured_workspace = os.environ.get("OCTOLYZER_WORKSPACE")
         workspace_root = Path(configured_workspace).expanduser() if configured_workspace else Path.cwd()
-        self.workspace_roots = [workspace_root, runtime_root]
+        self.workspace_roots = [runtime_root, workspace_root]
+        self._user_selected_environment = False
         self.runner = ProcessRunner(self)
         self._build_ui()
         self._restore_settings()
@@ -763,13 +764,28 @@ class MainWindow(QMainWindow):
         left_width = round(total_width * 0.3)
         self.main_splitter.setSizes([left_width, total_width - left_width])
 
+    def _default_preferred_executable(self) -> str:
+        """Prefer the repository .venv, then the running interpreter if inside .venv, then saved settings."""
+        for rel_path in (
+            Path(".venv") / "Scripts" / "python.exe",
+            Path(".venv") / "bin" / "python",
+        ):
+            venv_python = self.runtime_root / rel_path
+            if venv_python.is_file():
+                return str(venv_python)
+        current_exe = Path(sys.executable).expanduser()
+        if (current_exe.parent.parent / "pyvenv.cfg").is_file():
+            return str(current_exe)
+        saved = self.settings.value("environment_executable", "")
+        return str(saved) if saved else str(current_exe)
+
     def refresh_environments(self) -> None:
         if self.discovery_thread is not None:
             return
-        selected = self._selected_candidate()
-        previous_executable = str(selected.executable) if selected else self.settings.value("environment_executable", "")
+        selected = self._selected_candidate() if self._user_selected_environment else None
+        preferred_executable = str(selected.executable) if selected else self._default_preferred_executable()
         if not self.candidates:
-            self._replace_candidates(load_cached_environments(), previous_executable)
+            self._replace_candidates(load_cached_environments(), preferred_executable)
         self.current_probe = None
         self.probing_executable = None
         self._set_ui_state(UiState.DISCOVERING)
@@ -810,16 +826,19 @@ class MainWindow(QMainWindow):
                 candidate.label,
                 candidate,
             )
-        for index, candidate in enumerate(self.candidates):
-            if self._candidate_key(candidate.executable) == self._candidate_key(preferred_executable):
-                self.environment_combo.setCurrentIndex(index)
-                break
+        preferred_str = str(preferred_executable).strip()
+        if preferred_str:
+            preferred_key = self._candidate_key(preferred_str)
+            for index, candidate in enumerate(self.candidates):
+                if self._candidate_key(candidate.executable) == preferred_key:
+                    self.environment_combo.setCurrentIndex(index)
+                    break
         self.environment_combo.blockSignals(False)
         self._update_environment_details()
 
     def _discovery_finished(self, candidates: list[EnvironmentCandidate]) -> None:
-        selected = self._selected_candidate()
-        preferred_executable = str(selected.executable) if selected else self.settings.value("environment_executable", "")
+        selected = self._selected_candidate() if self._user_selected_environment else None
+        preferred_executable = str(selected.executable) if selected else self._default_preferred_executable()
         self.current_probe = None
         self._replace_candidates(candidates, preferred_executable)
         self._set_ui_state(
@@ -871,6 +890,7 @@ class MainWindow(QMainWindow):
             candidate for candidate in self.candidates if self._candidate_key(candidate.executable) != selected_key
         ]
         self.candidates.insert(0, manual_candidate)
+        self._user_selected_environment = True
         self.environment_combo.insertItem(0, manual_candidate.label, manual_candidate)
         self.environment_combo.setCurrentIndex(0)
         self._set_ui_state(UiState.SELECTED, f"Selected {selected_path}. Check this environment.")
@@ -880,6 +900,7 @@ class MainWindow(QMainWindow):
         return candidate if isinstance(candidate, EnvironmentCandidate) else None
 
     def _environment_changed(self) -> None:
+        self._user_selected_environment = True
         self.current_probe = None
         self.probing_executable = None
         self._update_environment_details()

@@ -1,19 +1,18 @@
-import torch
 import os
-import cv2
-import torch.nn as nn 
-from torch.utils.data import DataLoader, Dataset
-from torchvision.transforms import v2 as T
-from torchvision import tv_tensors
-import numpy as np
-from PIL import Image
-from tqdm.autonotebook import tqdm
-from pathlib import PurePath, PosixPath
-from PIL import Image, ImageOps
-
 import sys
+from pathlib import PosixPath, PurePath
+
+import cv2
+import numpy as np
+import torch
+import torch.nn as nn
+from PIL import Image, ImageOps
 from skimage import measure
 from skimage import morphology as morph
+from torch.utils.data import DataLoader, Dataset
+from torchvision import tv_tensors
+from torchvision.transforms import v2 as T
+from tqdm.autonotebook import tqdm
 
 SCRIPT_PATH = os.path.realpath(os.path.dirname(__file__))
 
@@ -276,8 +275,8 @@ class AVOSegmenter:
             all_pred = (imAV,imA,imV,imOD,imVClass)
             imout = combine_classes(all_pred, location, self.postprocess_OD)
 
-            # get optic disc centre
-            od_centre = _get_od_centre(imOD)
+            # get optic disc centre on refined OD mask
+            od_centre = _get_od_centre(imout[...,1])
             
             return imout, od_centre
 
